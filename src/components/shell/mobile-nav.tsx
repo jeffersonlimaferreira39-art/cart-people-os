@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Menu, X } from "lucide-react";
 import { NavLinks, type NavGroup } from "./nav-links";
+import { BrandLogo } from "./brand-logo";
 
 export function MobileNav({ groups }: { groups: NavGroup[] }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +38,7 @@ export function MobileNav({ groups }: { groups: NavGroup[] }) {
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="flex w-[280px] max-w-[85vw] flex-col gap-6 overflow-y-auto bg-brand p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[15px] font-semibold text-brand-ink">C&apos;Art People OS</span>
+              <BrandLogo variant="brand" className="h-8" />
               <button
                 type="button"
                 onClick={() => setOpen(false)}

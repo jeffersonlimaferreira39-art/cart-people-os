@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
+import { BrandLogo } from "@/components/shell/brand-logo";
 import { MobileMenu, OrgName, SidebarNav, UnitPicker, UserBlock } from "./shell";
 
 function NavFallback() {
@@ -18,9 +19,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh lg:grid lg:grid-cols-[252px_minmax(0,1fr)] lg:bg-[linear-gradient(90deg,var(--brand)_252px,var(--bg)_252px)]">
       <aside className="sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto bg-brand px-3 py-5 lg:flex">
         <div className="px-3">
-          <p className="text-[17px] leading-tight font-semibold tracking-[-0.01em] text-brand-ink">
-            C&apos;Art People OS
-          </p>
+          <BrandLogo variant="brand" className="h-10" />
+          <p className="mt-2 text-[13px] font-semibold text-brand-ink">People OS</p>
           <p className="mt-0.5 text-[12.5px] text-brand-ink-2">
             <Suspense fallback="Carregando…">
               <OrgName />

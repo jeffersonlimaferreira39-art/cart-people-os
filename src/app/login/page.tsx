@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { BrandLogo } from "@/components/shell/brand-logo";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -19,7 +20,10 @@ export default function LoginPage() {
             <circle cx="215" cy="300" r="34" />
           </g>
         </svg>
-        <p className="text-[17px] font-semibold">C&apos;Art People OS</p>
+        <div>
+          <BrandLogo variant="brand" className="h-14" />
+          <p className="mt-2 text-[15px] font-semibold">People OS</p>
+        </div>
         <div className="relative max-w-md">
           <p className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
             Quem faz cada ambiente acontecer, num só lugar.
@@ -31,7 +35,9 @@ export default function LoginPage() {
       </section>
       <section className="flex items-center justify-center px-5 py-12">
         <div className="w-full max-w-sm">
-          <p className="mb-8 text-[17px] font-semibold text-ink lg:hidden">C&apos;Art People OS</p>
+          <div className="mb-8 lg:hidden">
+            <BrandLogo variant="auto" className="h-11" />
+          </div>
           <h1 className="text-[26px] font-semibold tracking-[-0.015em]">Entrar</h1>
           <p className="mt-1 mb-7 text-ink-2">Acesso restrito a colaboradores convidados.</p>
           <Suspense>
