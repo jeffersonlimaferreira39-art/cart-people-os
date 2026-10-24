@@ -38,7 +38,7 @@ async function MyData() {
   const period = todayIn().slice(0, 7);
   const [detail, payroll] = await Promise.all([getEmployeeDetail(viewer, viewer.employee.id), getMyPayroll(viewer, period)]);
   if (!detail) return null;
-  const pay = payroll?.result.status === "calculada" ? payroll.result.totals : null;
+  const pay = payroll[0]?.result.status === "calculada" ? payroll[0].result.totals : null;
   const { employee: e, sensitive: s } = detail;
   const rows: [string, string][] = [
     ["Matrícula", e.registration_number],

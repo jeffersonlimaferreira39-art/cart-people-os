@@ -1,10 +1,15 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { viewerCan, type Viewer } from "@/lib/auth/viewer";
-import { monthBounds } from "@/lib/domain/dates";
+import { addMonths, monthBounds } from "@/lib/domain/dates";
 import {
-  DEFAULT_PROFILE, calculatePayroll, countChildrenUnder14,
-  type MonthEntry, type PayrollProfile, type PayrollResult, type RecurringItem,
+  averageVariables, calculateThirteenth, calculateVacation, fixedRemuneration, monthRange, vacationDaysInMonth,
+  type HistoryEntry, type PayrollKind,
+} from "@/lib/domain/payroll-annual";
+import { formatDate } from "@/lib/format";
+import {
+  DEFAULT_PROFILE, calculatePayroll, countChildrenUnder14, round2,
+   type PayrollProfile, type PayrollResult, type RecurringItem,
 } from "@/lib/domain/payroll";
 import { REFERENCE_TABLES, TABLE_SCHEMAS, type PayrollTables, type TableKind } from "@/lib/domain/payroll-tables";
 import { inUnit } from "./scope";
@@ -114,13 +119,17 @@ export async function getEmployeePayroll(employeeId: string): Promise<EmployeePa
 }
 
 export type PreviewRow = {
+  /** Único por linha (um colaborador pode ter mais de um recibo de férias no mês). */
+  key: string;
   employee: { id: string; full_name: string; registration_number: string; employment_type: string; unit_code: string; department: string };
   result: PayrollResult;
   childrenUnder14: number;
   irrfDependents: number;
+  /** Contexto da linha (ex.: período das férias). */
+  note?: string;
 };
 
-export type PayrollPreview = { period: string; tables: PayrollTables; rows: PreviewRow[] };
+export type PayrollPreview = { period: string; kind: PayrollKind; tables: PayrollTables; rows: PreviewRow[] };
 
 type EmpRow = {
   id: string;
@@ -137,35 +146,54 @@ type EmpRow = {
  * Prévia da competência para a unidade em foco. Horas extras e noturnas do
  * ponto entram como sugestão; lançamento manual do mesmo código prevalece.
  */
-export async function getPayrollPreview(viewer: Viewer, period: string, employeeId?: string): Promise<PayrollPreview> {
+export async function getPayrollPreview(
+  viewer: Viewer,
+  period: string,
+  employeeId?: string,
+  kind: PayrollKind = "mensal",
+): Promise<PayrollPreview> {
   if (!viewerCan(viewer, "viewSensitive")) throw new Error("Sem acesso à prévia da folha.");
-  return computePreview(viewer, period, { employeeId, scopeToUnit: true, includeTime: viewerCan(viewer, "viewTime") });
+  return computePreview(viewer, period, kind, { employeeId, scopeToUnit: true, includeTime: viewerCan(viewer, "viewTime") });
 }
 
 /**
  * "Minha folha": a prévia do próprio colaborador. A RLS libera ao titular a
- * leitura dos próprios dados de remuneração, dependentes e ponto.
+ * leitura dos próprios dados de remuneração, dependentes, ausências e ponto.
  */
-export async function getMyPayroll(viewer: Viewer, period: string): Promise<PreviewRow | null> {
-  if (!viewer.employee) return null;
-  const preview = await computePreview(viewer, period, { employeeId: viewer.employee.id, scopeToUnit: false, includeTime: true });
-  return preview.rows[0] ?? null;
+export async function getMyPayroll(viewer: Viewer, period: string, kind: PayrollKind = "mensal"): Promise<PreviewRow[]> {
+  if (!viewer.employee) return [];
+  const preview = await computePreview(viewer, period, kind, { employeeId: viewer.employee.id, scopeToUnit: false, includeTime: true });
+  return preview.rows;
+}
+
+/** Meses usados nas médias de variáveis de cada tipo de folha. */
+function averagesWindow(kind: PayrollKind, period: string): { from: string; to: string } | null {
+  const prev = addMonths(`${period}-01`, -1).slice(0, 7);
+  if (kind === "decimo1" || kind === "decimo2") {
+    const jan = `${period.slice(0, 4)}-01`;
+    return prev >= jan ? { from: jan, to: prev } : null;
+  }
+  if (kind === "ferias") return { from: addMonths(`${period}-01`, -12).slice(0, 7), to: prev };
+  return null;
 }
 
 async function computePreview(
   viewer: Viewer,
   period: string,
+  kind: PayrollKind,
   opts: { employeeId?: string; scopeToUnit: boolean; includeTime: boolean },
 ): Promise<PayrollPreview> {
   const { employeeId } = opts;
   const supabase = await createClient();
   const { start, end } = monthBounds(period);
+  // 13º: quem esteve ativo em algum momento do ano; demais: ativos na competência.
+  const activeFrom = kind === "decimo1" || kind === "decimo2" ? `${period.slice(0, 4)}-01-01` : start;
 
   let empQ = supabase
     .from("employees")
     .select("id, full_name, registration_number, employment_type, hire_date, termination_date, unit:units(code), department:departments(name)")
     .lte("hire_date", end)
-    .or(`termination_date.is.null,termination_date.gte.${start}`)
+    .or(`termination_date.is.null,termination_date.gte.${activeFrom}`)
     .order("full_name")
     .limit(5000);
   if (opts.scopeToUnit) empQ = inUnit(empQ, viewer);
@@ -175,32 +203,41 @@ async function computePreview(
   const emps = (empData ?? []) as unknown as EmpRow[];
   const ids = emps.map((e) => e.id);
   const tables = await getPayrollTables(viewer, period);
-  if (!ids.length) return { period, tables, rows: [] };
+  if (!ids.length) return { period, kind, tables, rows: [] };
+
+  const win = averagesWindow(kind, period);
+  const histFrom = win?.from ?? period;
+  const timeFrom = `${histFrom}-01`;
 
   const chunk = <T,>(arr: T[], n = 200) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-  const fetchIn = async <T,>(table: string, cols: string, extra?: (q: ReturnType<typeof supabase.from>) => unknown) => {
+  type Q = { eq: (c: string, v: string) => Q; gte: (c: string, v: string) => Q; lte: (c: string, v: string) => Q };
+  const fetchIn = async <T,>(table: string, cols: string, extra?: (q: Q) => Q) => {
     const out: T[] = [];
     for (const part of chunk(ids)) {
       let q = supabase.from(table).select(cols).in("employee_id", part).limit(100000);
-      if (extra) q = extra(q as never) as typeof q;
+      if (extra) q = extra(q as unknown as Q) as unknown as typeof q;
       const { data } = await q;
       out.push(...((data ?? []) as T[]));
     }
     return out;
   };
 
-  const [sens, profiles, items, entries, deps, time] = await Promise.all([
+  const [sens, profiles, items, entries, deps, time, vacations] = await Promise.all([
     fetchIn<{ employee_id: string; base_salary: number | string | null }>("employee_sensitive", "employee_id, base_salary"),
     fetchIn<Record<string, unknown>>("employee_payroll_profile", PROFILE_COLUMNS),
     fetchIn<Record<string, unknown>>("employee_payroll_items", ITEM_COLUMNS),
-    fetchIn<{ employee_id: string; code: string; quantity: number | null; amount: number | null }>(
-      "payroll_entries", "employee_id, code, quantity, amount", (q) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq("period", period)),
+    fetchIn<{ employee_id: string; period: string; code: string; quantity: number | null; amount: number | null }>(
+      "payroll_entries", "employee_id, period, code, quantity, amount", (q) => q.gte("period", histFrom).lte("period", period)),
     fetchIn<{ employee_id: string; relationship: string; birth_date: string | null; ir_dependent: boolean }>(
       "dependents", "employee_id, relationship, birth_date, ir_dependent"),
     opts.includeTime
-      ? fetchIn<{ employee_id: string; overtime_minutes: number; night_minutes: number }>(
-          "time_entries", "employee_id, overtime_minutes, night_minutes",
-          (q) => (q as unknown as { gte: (c: string, v: string) => { lte: (c: string, v: string) => unknown } }).gte("work_date", start).lte("work_date", end))
+      ? fetchIn<{ employee_id: string; work_date: string; overtime_minutes: number; night_minutes: number }>(
+          "time_entries", "employee_id, work_date, overtime_minutes, night_minutes", (q) => q.gte("work_date", timeFrom).lte("work_date", end))
+      : Promise.resolve([]),
+    kind === "mensal" || kind === "ferias"
+      ? fetchIn<{ employee_id: string; start_date: string; end_date: string; days: number; sell_days: number }>(
+          "leave_requests", "employee_id, start_date, end_date, days, sell_days",
+          (q) => q.eq("type", "ferias").eq("status", "approved").lte("start_date", end).gte("end_date", start))
       : Promise.resolve([]),
   ]);
 
@@ -215,52 +252,115 @@ async function computePreview(
   const entriesOf = by(entries);
   const depsOf = by(deps);
   const timeOf = by(time);
+  const vacationsOf = by(vacations);
 
-  const rows = emps.map((e): PreviewRow => {
+  /** Lançamentos manuais + horas do ponto (por mês) de um colaborador. */
+  const historyOf = (id: string): HistoryEntry[] => {
+    const manual = (entriesOf.get(id) ?? []).map((x) => ({
+      period: x.period,
+      code: x.code,
+      quantity: x.quantity === null ? null : Number(x.quantity),
+      amount: x.amount === null ? null : Number(x.amount),
+      source: "manual" as const,
+    }));
+    const perMonth = new Map<string, { ot: number; night: number }>();
+    for (const t of timeOf.get(id) ?? []) {
+      const m = t.work_date.slice(0, 7);
+      const acc = perMonth.get(m) ?? { ot: 0, night: 0 };
+      acc.ot += t.overtime_minutes;
+      acc.night += t.night_minutes;
+      perMonth.set(m, acc);
+    }
+    const ponto: HistoryEntry[] = [];
+    for (const [m, v] of perMonth) {
+      if (v.ot) ponto.push({ period: m, code: "HE50", quantity: Math.round((v.ot / 60) * 100) / 100, amount: null, source: "ponto" });
+      if (v.night) ponto.push({ period: m, code: "ADN", quantity: Math.round((v.night / 60) * 100) / 100, amount: null, source: "ponto" });
+    }
+    return [...manual, ...ponto];
+  };
+
+  const rows: PreviewRow[] = [];
+  for (const e of emps) {
     const myDeps = depsOf.get(e.id) ?? [];
     const childrenUnder14 = countChildrenUnder14(myDeps, period);
     const irrfDependents = myDeps.filter((d) => d.ir_dependent).length;
-    const t = timeOf.get(e.id) ?? [];
-    const overtime = t.reduce((a, x) => a + x.overtime_minutes, 0);
-    const night = t.reduce((a, x) => a + x.night_minutes, 0);
-    const monthEntries: MonthEntry[] = [
-      ...(entriesOf.get(e.id) ?? []).map((x) => ({
-        code: x.code,
-        quantity: x.quantity === null ? null : Number(x.quantity),
-        amount: x.amount === null ? null : Number(x.amount),
-        source: "manual" as const,
-      })),
-      ...(overtime ? [{ code: "HE50", quantity: Math.round((overtime / 60) * 100) / 100, amount: null, source: "ponto" as const }] : []),
-      ...(night ? [{ code: "ADN", quantity: Math.round((night / 60) * 100) / 100, amount: null, source: "ponto" as const }] : []),
-    ];
-    const result = calculatePayroll({
-      period,
+    const history = historyOf(e.id);
+    const current = history.filter((h) => h.period === period);
+    const informed = (code: string) => {
+      const list = current.filter((h) => h.code === code && h.source === "manual");
+      return list.length ? list.reduce((a, h) => a + (h.amount ?? 0), 0) : undefined;
+    };
+    const baseInput = {
       employmentType: e.employment_type,
       hireDate: e.hire_date,
       terminationDate: e.termination_date,
       baseSalary: salaryOf.get(e.id) ?? null,
       profile: toProfile(profileOf.get(e.id)),
       items: itemsOf.get(e.id) ?? [],
-      entries: monthEntries,
       irrfDependents,
-      childrenUnder14,
       tables,
-    });
-    return {
-      employee: {
-        id: e.id,
-        full_name: e.full_name,
-        registration_number: e.registration_number,
-        employment_type: e.employment_type,
-        unit_code: e.unit?.code ?? "",
-        department: e.department?.name ?? "",
-      },
-      result,
-      childrenUnder14,
-      irrfDependents,
     };
-  });
-  return { period, tables, rows };
+    const employee = {
+      id: e.id,
+      full_name: e.full_name,
+      registration_number: e.registration_number,
+      employment_type: e.employment_type,
+      unit_code: e.unit?.code ?? "",
+      department: e.department?.name ?? "",
+    };
+    /** Médias no intervalo, só nos meses de vínculo. */
+    const averagesFor = (w: { from: string; to: string } | null, override?: number) => {
+      if (override !== undefined) return { value: round2(override), source: "informada" as const };
+      if (!w) return { value: 0, source: "calculada" as const };
+      const months = monthRange(w.from, w.to).filter((m) => m >= e.hire_date.slice(0, 7) && (!e.termination_date || m <= e.termination_date.slice(0, 7)));
+      if (!months.length) return { value: 0, source: "calculada" as const };
+      const hourRate = fixedRemuneration(baseInput, period).hourRate;
+      return { value: averageVariables(history, months, hourRate, tables).value, source: "calculada" as const };
+    };
+
+    if (kind === "mensal") {
+      const result = calculatePayroll({
+        ...baseInput,
+        period,
+        entries: current.map(({ code, quantity, amount, source }) => ({ code, quantity, amount, source })),
+        childrenUnder14,
+        vacationDays: vacationDaysInMonth(vacationsOf.get(e.id) ?? [], period),
+      });
+      rows.push({ key: e.id, employee, result, childrenUnder14, irrfDependents });
+    } else if (kind === "decimo1" || kind === "decimo2") {
+      const avg = averagesFor(win, informed("MEDIAS_13"));
+      const result = calculateThirteenth({
+        ...baseInput,
+        stage: kind === "decimo1" ? "primeira" : "segunda",
+        period,
+        averages: avg.value,
+        averagesSource: avg.source,
+        firstInstallmentPaid: kind === "decimo2" ? informed("ADIANTAMENTO_13") : undefined,
+      });
+      rows.push({ key: e.id, employee, result, childrenUnder14, irrfDependents });
+    } else {
+      const starting = (vacationsOf.get(e.id) ?? []).filter((v) => v.start_date >= start && v.start_date <= end);
+      for (const v of starting) {
+        const w = { from: addMonths(`${v.start_date.slice(0, 7)}-01`, -12).slice(0, 7), to: addMonths(`${v.start_date.slice(0, 7)}-01`, -1).slice(0, 7) };
+        const avg = averagesFor(w, informed("MEDIAS_FERIAS"));
+        const result = calculateVacation({
+          ...baseInput,
+          vacation: { start: v.start_date, days: Number(v.days), sellDays: Number(v.sell_days) },
+          averages: avg.value,
+          averagesSource: avg.source,
+        });
+        rows.push({
+          key: `${e.id}-${v.start_date}`,
+          employee,
+          result,
+          childrenUnder14,
+          irrfDependents,
+          note: `${formatDate(v.start_date)} a ${formatDate(v.end_date)} · ${v.days} d${Number(v.sell_days) ? ` + ${v.sell_days} d de abono` : ""}`,
+        });
+      }
+    }
+  }
+  return { period, kind, tables, rows };
 }
 
 export type EntryRow = { id: string; code: string; quantity: number | null; amount: number | null; notes: string | null; created_at: string };

@@ -30,6 +30,9 @@ export const ENTRY_CODES = {
   ADIANTAMENTO: { label: "Adiantamento salarial", kind: "desconto", unit: "valor" },
   DESCONTO_DIVERSO: { label: "Outros descontos", kind: "desconto", unit: "valor" },
   VT_DIAS: { label: "Dias de vale-transporte no mês", kind: "informativo", unit: "dias" },
+  MEDIAS_FERIAS: { label: "Médias de variáveis para férias (substitui o cálculo)", kind: "informativo", unit: "valor" },
+  MEDIAS_13: { label: "Médias de variáveis para o 13º (substitui o cálculo)", kind: "informativo", unit: "valor" },
+  ADIANTAMENTO_13: { label: "1ª parcela do 13º já paga (substitui o cálculo)", kind: "informativo", unit: "valor" },
 } as const;
 export type EntryCode = keyof typeof ENTRY_CODES;
 export const isEntryCode = (v: string): v is EntryCode => Object.hasOwn(ENTRY_CODES, v);
@@ -121,6 +124,8 @@ export type PayrollInput = {
   irrfDependents: number;
   childrenUnder14: number;
   tables: Omit<PayrollTables, "sources">;
+  /** Dias de férias gozados na competência: saem do salário e vão para o recibo de férias. */
+  vacationDays?: number;
 };
 
 export type PayrollLine = {
@@ -232,7 +237,7 @@ export function paidDaysInPeriod(period: string, hireDate: string, terminationDa
   return Math.max(0, toCommercial - Math.min(from, 30) + 1);
 }
 
-function itemActive(item: RecurringItem, period: string) {
+export function itemActive(item: RecurringItem, period: string) {
   return item.start_period <= period && (!item.end_period || item.end_period >= period);
 }
 
@@ -285,9 +290,15 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   const fromPonto = (code: EntryCode) => entries.some((e) => e.code === code && e.source === "ponto");
 
   // --- Proventos ---------------------------------------------------------
-  const salary = round2(dayRate * paidDays);
-  add("SALARIO", regime === "estagio" ? "Bolsa-auxílio" : "Salário", "provento", qty(paidDays, "d"), salary,
+  const vacationDays = Math.min(paidDays, Math.max(0, input.vacationDays ?? 0));
+  const workedDays = paidDays - vacationDays;
+  const salary = round2(dayRate * workedDays);
+  add("SALARIO", regime === "estagio" ? "Bolsa-auxílio" : "Salário", "provento", qty(workedDays, "d"), salary,
     regime === "estagio" ? { inss: false, irrf: true, fgts: false } : ALL);
+  if (vacationDays) {
+    add("FERIAS_INFO", regime === "estagio" ? "Recesso no mês (recibo próprio)" : "Férias no mês (recibo próprio)", "informativo", qty(vacationDays, "d"), dayRate * vacationDays);
+    warnings.push("Férias no mês: o INSS e o FGTS do recibo de férias são consolidados com este mês pela contabilidade.");
+  }
 
   const inc = regime === "estagio" ? { inss: false, irrf: true, fgts: false } : ALL;
   let variables = 0;
@@ -323,7 +334,7 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   if (regime === "clt" && p.unhealthiness_grade !== "nenhum") {
     const rate = params.unhealthinessRates[p.unhealthiness_grade];
     add("INSALUBRIDADE", `Insalubridade grau ${({ minimo: "mínimo", medio: "médio", maximo: "máximo" } as const)[p.unhealthiness_grade]}`, "provento", `${pct(rate)} do mínimo`,
-      (params.minimumWage * (rate / 100) * paidDays) / 30, ALL);
+      (params.minimumWage * (rate / 100) * workedDays) / 30, ALL);
   }
   if (regime === "clt" && p.hazard_pay) {
     add("PERICULOSIDADE", "Periculosidade", "provento", pct(params.hazardRate), salary * (params.hazardRate / 100), ALL);
@@ -359,6 +370,7 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
     if (bases.inss <= sf.incomeLimit) {
       add("SALARIO_FAMILIA", "Salário-família", "provento", qty(input.childrenUnder14, input.childrenUnder14 === 1 ? "filho" : "filhos"),
         (sf.quota * input.childrenUnder14 * paidDays) / 30);
+      // Cota integral no mês: o recibo de férias não paga salário-família.
     }
   }
 
@@ -387,7 +399,10 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   // --- Benefícios e descontos contratuais ------------------------------------
   let companyBenefits = 0;
   if (p.vt_enabled && p.vt_daily_amount > 0) {
-    const vtDays = entries.some((e) => e.code === "VT_DIAS") ? sumQty("VT_DIAS") : p.vt_days;
+    // Dias de VT informados no mês prevalecem; senão, o padrão proporcional aos dias trabalhados.
+    const vtDays = entries.some((e) => e.code === "VT_DIAS")
+      ? sumQty("VT_DIAS")
+      : Math.round((p.vt_days * workedDays) / Math.max(paidDays, 1));
     const vtCost = round2(p.vt_daily_amount * vtDays);
     // Estagiário recebe auxílio-transporte sem o desconto de 6%.
     const vtDiscount = regime === "clt" ? round2(Math.min(vtCost, salary * (params.vtMaxDiscountRate / 100))) : 0;

@@ -30,6 +30,18 @@ cálculo. A especificação mantém a folha oficial com a contabilidade até hom
    organização (são valores legais, não pessoais) para que a prévia do titular use as mesmas
    vigências do DP.
 
+7. **13º e férias** (`src/lib/domain/payroll-annual.ts`), como tipos de folha na prévia:
+   - 13º: avos (meses com 15+ dias), base = remuneração fixa (salário, adicionais, rubricas com
+     INSS) + média de variáveis do ano; 1ª parcela = 50% sem INSS/IRRF, com FGTS; 2ª parcela =
+     integral − adiantamento, INSS e IRRF exclusivos (deduções legais, sem desconto simplificado
+     nem redução), FGTS sobre a diferença. Desligados: 13º na rescisão (fora). Estágio: sem 13º.
+   - Férias: recibo no mês de início de cada férias aprovada em "Férias e ausências": férias +
+     1/3, abono pecuniário + 1/3 (isentos), INSS, IRRF (como no mês), pensão, FGTS e data-limite
+     de pagamento (CLT art. 145). Estágio: recesso sem 1/3. Na folha mensal, os dias de férias
+     saem do salário e o VT é proporcional.
+   - Médias: horas médias × valor-hora atual e comissões em R$ (12 meses antes das férias; meses
+     do ano antes do 13º). O DP pode informar médias e a 1ª parcela já paga, substituindo o cálculo.
+
 ## Consequências
 Antes do uso real, a contabilidade compara a prévia com a folha oficial de pelo menos um mês
-(checklist de homologação). Encargos patronais além do FGTS, 13º, férias e rescisão ficam fora.
+(checklist de homologação). Encargos patronais além do FGTS e rescisão ficam fora; o INSS do mês com férias é consolidado pela contabilidade.

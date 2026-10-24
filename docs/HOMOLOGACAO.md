@@ -17,6 +17,8 @@ A produção com dados reais só começa com todos os itens marcados e as assina
 - [ ] Contabilidade conferiu as tabelas de INSS, IRRF e salário-família cadastradas em Prévia da folha → Tabelas
 - [ ] Prévia de um mês real comparada com a folha oficial (diferença explicada rubrica a rubrica)
 - [ ] Colaborador de teste conferiu "Minha folha" contra o holerite oficial do mesmo mês
+- [ ] Contabilidade conferiu 13º (1ª e 2ª parcelas) e um recibo de férias com abono contra o sistema oficial,
+      incluindo o método de médias e a tributação do IRRF
 - [ ] DP validou rubricas, incidências e a regra de DSR/faltas usada na prévia
 - [ ] RH validou as definições de indicador (rotatividade, tempo de casa) da tela Análises
 - [ ] Relatórios exportados conferidos contra a base (Excel, CSV e PDF) e registro em `report_exports` revisado

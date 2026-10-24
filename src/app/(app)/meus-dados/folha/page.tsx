@@ -58,12 +58,26 @@ async function Content({ searchParams }: { searchParams: PageProps<"/meus-dados/
   const months = Array.from({ length: 6 }, (_, i) => addMonths(`${current}-01`, -i).slice(0, 7));
   const period = PERIOD_RE.test(wanted) && months.includes(wanted) ? wanted : current;
   const id = viewer.employee.id;
-  const [row, data, entries, tables] = await Promise.all([
+  const month = Number(period.slice(5, 7));
+  // 13º: 1ª parcela em novembro e 2ª em dezembro; férias no mês de início.
+  const decimoKind = month === 11 ? "decimo1" : month === 12 ? "decimo2" : null;
+  const [[row], data, entries, tables, decimo, vacations] = await Promise.all([
     getMyPayroll(viewer, period),
     getEmployeePayroll(id),
     listEntries(id, period),
     getPayrollTables(viewer, period),
+    decimoKind ? getMyPayroll(viewer, period, decimoKind) : Promise.resolve([]),
+    getMyPayroll(viewer, period, "ferias"),
   ]);
+  const extras = [
+    ...decimo.filter((r) => r.result.status === "calculada").map((r) => ({
+      key: `13-${r.key}`,
+      title: decimoKind === "decimo1" ? "13º salário · 1ª parcela" : "13º salário · 2ª parcela",
+      note: undefined as string | undefined,
+      result: r.result,
+    })),
+    ...vacations.filter((r) => r.result.status === "calculada").map((r) => ({ key: `f-${r.key}`, title: "Recibo de férias", note: r.note, result: r.result })),
+  ];
   const p = data.profile;
   const activeItems = data.items.filter((it) => it.start_period <= period && (!it.end_period || it.end_period >= period));
 
@@ -102,6 +116,7 @@ async function Content({ searchParams }: { searchParams: PageProps<"/meus-dados/
       </nav>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="flex min-w-0 flex-col gap-8">
         <section className="min-w-0">
           <SectionTitle>Demonstrativo estimado · {formatPeriod(period).toLowerCase()}</SectionTitle>
           <Panel>
@@ -114,6 +129,17 @@ async function Content({ searchParams }: { searchParams: PageProps<"/meus-dados/
             )}
           </Panel>
         </section>
+        {extras.map((x) => (
+          <section key={x.key} className="min-w-0">
+            <SectionTitle aside={x.note ? <span className="text-[13px] text-accent">{x.note}</span> : undefined}>
+              {x.title} (estimativa)
+            </SectionTitle>
+            <Panel>
+              <Payslip result={x.result} tables={tables} audience="titular" />
+            </Panel>
+          </section>
+        ))}
+        </div>
 
         <aside className="flex min-w-0 flex-col gap-8">
           <section>

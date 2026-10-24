@@ -6,6 +6,9 @@ import { getEmployeeDetail } from "@/lib/data/employees";
 import { getPayrollPreview, listEntries } from "@/lib/data/payroll";
 import { todayIn } from "@/lib/domain/dates";
 import { ENTRY_CODES } from "@/lib/domain/payroll";
+import { PAYROLL_KINDS, isPayrollKind } from "@/lib/domain/payroll-annual";
+import Link from "next/link";
+import { cn } from "@/components/ui/cn";
 import { formatMoney, formatPeriod } from "@/lib/format";
 import { PageHeader, SectionTitle } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
@@ -39,12 +42,13 @@ async function Content({
   const sp = await searchParams;
   const wanted = typeof sp.competencia === "string" ? sp.competencia : "";
   const period = PERIOD_RE.test(wanted) ? wanted : todayIn().slice(0, 7);
+  const kind = typeof sp.tipo === "string" && isPayrollKind(sp.tipo) ? sp.tipo : "mensal";
   const viewer = await getViewer();
   const detail = await getEmployeeDetail(viewer, id);
   if (!detail) notFound();
   const e = detail.employee;
   if (!viewerCanInUnit(viewer, "viewSensitive", e.unit_id)) return <AccessDenied what="esta prévia da folha" />;
-  const [preview, entries] = await Promise.all([getPayrollPreview(viewer, period, id), listEntries(id, period)]);
+  const [preview, entries] = await Promise.all([getPayrollPreview(viewer, period, id, kind), listEntries(id, period)]);
   const row = preview.rows[0];
 
   return (
@@ -56,20 +60,51 @@ async function Content({
         actions={
           <>
             <form className="flex items-end gap-2">
+              <input type="hidden" name="tipo" value={kind} />
               <input type="month" name="competencia" defaultValue={period} aria-label="Competência"
                 className="h-9 rounded-[var(--radius-control)] border border-line-strong bg-surface/80 px-3 text-sm text-ink" />
               <button type="submit" className="h-9 rounded-[var(--radius-control)] border border-line-strong px-3 text-sm text-ink hover:border-accent/60">Ver</button>
             </form>
             <ButtonLink href={`/colaboradores/${id}/folha`} variant="secondary">Dados da folha</ButtonLink>
-            <ButtonLink href={`/dp/folha?competencia=${period}`} variant="ghost">Voltar à prévia</ButtonLink>
+            <ButtonLink href={`/dp/folha?competencia=${period}&tipo=${kind}`} variant="ghost">Voltar à prévia</ButtonLink>
           </>
         }
       />
 
+      <nav aria-label="Tipo de folha" className="mb-5 flex flex-wrap gap-1 rounded-[var(--radius-control)] border border-line-strong bg-surface/60 p-1 sm:w-fit">
+        {PAYROLL_KINDS.map((k) => (
+          <Link
+            key={k.id}
+            href={`/dp/folha/${id}?competencia=${period}&tipo=${k.id}`}
+            aria-current={k.id === kind ? "page" : undefined}
+            className={cn("rounded-[6px] px-3 py-1.5 text-[13px] transition-colors", k.id === kind ? "bg-accent font-medium text-accent-ink" : "text-ink-2 hover:text-ink")}
+          >
+            {k.label}
+          </Link>
+        ))}
+      </nav>
+
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
-        <section className="min-w-0">
-          <SectionTitle>Demonstrativo estimado</SectionTitle>
-          <Panel>{row ? <Payslip result={row.result} tables={preview.tables} /> : <p className="px-4 py-5 text-sm text-ink-2">Sem vínculo na competência.</p>}</Panel>
+        <section className="flex min-w-0 flex-col gap-6">
+          {preview.rows.length ? (
+            preview.rows.map((r) => (
+              <div key={r.key}>
+                <SectionTitle aside={r.note ? <span className="text-[13px] text-accent">{r.note}</span> : undefined}>
+                  {kind === "ferias" ? "Recibo de férias estimado" : kind === "mensal" ? "Demonstrativo estimado" : "13º salário estimado"}
+                </SectionTitle>
+                <Panel><Payslip result={r.result} tables={preview.tables} /></Panel>
+              </div>
+            ))
+          ) : (
+            <div>
+              <SectionTitle>Demonstrativo estimado</SectionTitle>
+              <Panel>
+                <p className="px-4 py-5 text-sm text-ink-2">
+                  {kind === "ferias" ? "Nenhuma férias aprovada começando nesta competência." : "Sem vínculo na competência."}
+                </p>
+              </Panel>
+            </div>
+          )}
         </section>
 
         <section className="min-w-0">

@@ -5,6 +5,7 @@ import { FileSpreadsheet, Settings2, Sheet } from "lucide-react";
 import { getViewer, unitLabel, viewerCan } from "@/lib/auth/viewer";
 import { getPayrollPreview } from "@/lib/data/payroll";
 import { todayIn } from "@/lib/domain/dates";
+import { PAYROLL_KINDS, isPayrollKind } from "@/lib/domain/payroll-annual";
 import { EMPLOYMENT_TYPE_LABELS, formatMoney, formatPeriod } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
@@ -37,7 +38,9 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
   const sp = await searchParams;
   const wanted = typeof sp.competencia === "string" ? sp.competencia : "";
   const period = PERIOD_RE.test(wanted) ? wanted : todayIn().slice(0, 7);
-  const preview = await getPayrollPreview(viewer, period);
+  const kind = typeof sp.tipo === "string" && isPayrollKind(sp.tipo) ? sp.tipo : "mensal";
+  const kindLabel = PAYROLL_KINDS.find((k) => k.id === kind)!.label;
+  const preview = await getPayrollPreview(viewer, period, undefined, kind);
   const calc = preview.rows.filter((r) => r.result.status === "calculada");
   const out = preview.rows.filter((r) => r.result.status !== "calculada");
   const sum = (k: keyof (typeof calc)[number]["result"]["totals"]) => calc.reduce((a, r) => a + r.result.totals[k], 0);
@@ -49,21 +52,22 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
       <PageHeader
         eyebrow="Departamento Pessoal"
         title="Prévia da folha"
-        description={`${unitLabel(viewer)} · competência ${formatPeriod(period).toLowerCase()}. Estimativa para conferência antes do envio à contabilidade.`}
+        description={`${unitLabel(viewer)} · ${kindLabel.toLowerCase()} · competência ${formatPeriod(period).toLowerCase()}. Estimativa para conferência antes do envio à contabilidade.`}
         actions={
           <>
             <form className="flex items-end gap-2" role="search">
+              <input type="hidden" name="tipo" value={kind} />
               <label>
                 <span className="sr-only">Competência</span>
                 <Input type="month" name="competencia" defaultValue={period} className="w-40" />
               </label>
               <Button type="submit" variant="secondary">Ver</Button>
             </form>
-            <a href={`/dp/folha/arquivo?competencia=${period}&formato=xlsx`} className={buttonClasses("primary")} download>
+            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${kind}&formato=xlsx`} className={buttonClasses("primary")} download>
               <FileSpreadsheet className="size-4" strokeWidth={1.75} />
               Excel
             </a>
-            <a href={`/dp/folha/arquivo?competencia=${period}&formato=csv`} className={buttonClasses("secondary")} download>
+            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${kind}&formato=csv`} className={buttonClasses("secondary")} download>
               <Sheet className="size-4" strokeWidth={1.75} />
               CSV
             </a>
@@ -74,6 +78,22 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
           </>
         }
       />
+
+      <nav aria-label="Tipo de folha" className="mb-5 flex flex-wrap gap-1 rounded-[var(--radius-control)] border border-line-strong bg-surface/60 p-1 sm:w-fit">
+        {PAYROLL_KINDS.map((k) => (
+          <Link
+            key={k.id}
+            href={`/dp/folha?competencia=${period}&tipo=${k.id}`}
+            aria-current={k.id === kind ? "page" : undefined}
+            className={cn(
+              "rounded-[6px] px-3 py-1.5 text-[13px] transition-colors",
+              k.id === kind ? "bg-accent font-medium text-accent-ink" : "text-ink-2 hover:text-ink",
+            )}
+          >
+            {k.label}
+          </Link>
+        ))}
+      </nav>
 
       <div className="mb-5 flex flex-col gap-2">
         <Notice tone="attention" title="Prévia, não é a folha oficial.">
@@ -107,24 +127,25 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
               </tr>
             </THead>
             <TBody>
-              {[...calc, ...out].map(({ employee: e, result: r }) => {
+              {[...calc, ...out].map(({ key, employee: e, result: r, note }) => {
                 const t = r.totals;
                 const ok = r.status === "calculada";
                 return (
-                  <Tr key={e.id} className={cn(!ok && "opacity-60")}>
+                  <Tr key={key} className={cn(!ok && "opacity-60")}>
                     <Td>
-                      <Link href={`/dp/folha/${e.id}?competencia=${period}`} className="font-medium text-ink hover:text-accent hover:underline">
+                      <Link href={`/dp/folha/${e.id}?competencia=${period}&tipo=${kind}`} className="font-medium text-ink hover:text-accent hover:underline">
                         {e.full_name}
                       </Link>
                       <span className="block text-[12px] text-ink-3">
                         {e.registration_number} · {e.unit_code}
                         {e.department ? ` · ${e.department}` : ""}
                       </span>
+                      {note ? <span className="block text-[12px] text-accent">{note}</span> : null}
                       {!ok ? <span className="block text-[12px] text-brass">{r.reason}</span> : null}
                       {ok && r.warnings.length ? <span className="mt-0.5 block"><Badge tone="attention">{r.warnings.length} aviso(s)</Badge></span> : null}
                     </Td>
                     <Td className="text-ink-2">{EMPLOYMENT_TYPE_LABELS[e.employment_type as keyof typeof EMPLOYMENT_TYPE_LABELS] ?? e.employment_type}</Td>
-                    <Td className="text-right font-mono">{ok ? r.paidDays : "—"}</Td>
+                    <Td className="text-right font-mono">{ok && r.paidDays ? r.paidDays : "—"}</Td>
                     <Td className="text-right font-mono">{ok ? formatMoney(t.proventos) : "—"}</Td>
                     <Td className="text-right font-mono text-ink-2">{ok ? formatMoney(t.inss) : "—"}</Td>
                     <Td className="text-right font-mono text-ink-2">{ok ? formatMoney(t.irrf) : "—"}</Td>
@@ -137,9 +158,15 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
             </TBody>
           </Table>
         ) : (
-          <EmptyState title="Ninguém nesta competência" action={<ButtonLink href="/colaboradores">Ver colaboradores</ButtonLink>}>
-            A prévia lista quem tinha vínculo ativo no mês. Cadastre o salário em Colaboradores → Dados da folha.
-          </EmptyState>
+          kind === "ferias" ? (
+            <EmptyState title="Nenhuma férias começando nesta competência" action={<ButtonLink href="/ausencias">Ver férias e ausências</ButtonLink>}>
+              O recibo de férias aparece no mês de início de cada férias aprovada em Férias e ausências.
+            </EmptyState>
+          ) : (
+            <EmptyState title="Ninguém nesta competência" action={<ButtonLink href="/colaboradores">Ver colaboradores</ButtonLink>}>
+              A prévia lista quem tinha vínculo ativo no mês. Cadastre o salário em Colaboradores → Dados da folha.
+            </EmptyState>
+          )
         )}
       </Panel>
     </>
