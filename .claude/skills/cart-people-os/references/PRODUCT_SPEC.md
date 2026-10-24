@@ -75,7 +75,11 @@ a tabela de dados sensíveis.
    rubricas fixas e dependentes (filhos até 14 anos, dependentes de IR); por competência:
    lançamentos variáveis (horas extras, faltas, comissões, adiantamento) e demonstrativo estimado
    com INSS, IRRF, FGTS e líquido; 13º (1ª e 2ª parcelas) e recibo de férias (1/3, abono, médias);
-   aba consolidada de benefícios e descontos; tabelas com vigência; exportação para a contabilidade.
+   aba consolidada de benefícios e descontos; digitação de folha em grade (todos os colaboradores,
+   colar do Excel); tabelas com vigência; exportação para a contabilidade.
+   **Comissões** — planos (% fixo, faixas por meta, % por categoria; base venda ou recebido),
+   vendedores com meta e % próprio, vendas e recebimentos por digitação ou planilha CSV, apuração
+   e lançamento como COMISSAO na folha; o vendedor vê a própria comissão em Minha folha.
 6. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
 7. **Documentos** — abas Colaboradores (todos os documentos das pessoas, com envio e filtro de
    vencimento), RH e DP (documentos da empresa por área, com unidade, competência, vencimento e
@@ -103,6 +107,8 @@ Migrações em `supabase/migrations/` são a fonte da verdade. Resumo:
 - `employee_payroll_profile`, `employee_payroll_items`, `payroll_entries` — remuneração, rubricas
   fixas e lançamentos do mês (sensível); `payroll_tax_tables` — tabelas de cálculo com vigência.
 - `org_documents` — documentos do RH/DP (bucket privado `org-documents/{org}/{area}/...`).
+- `commission_plans`, `employee_commission`, `sales`, `sale_payments` — comissões (remuneração:
+  Admin/RH/DP da unidade e o próprio vendedor; planos legíveis por membros).
 - `report_exports` — registro imutável de exportações.
 - `audit_log` — somente inserção via trigger; `ai_query_log` — perguntas ao assistente.
 
@@ -184,7 +190,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 48 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 54 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.

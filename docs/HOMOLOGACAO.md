@@ -4,7 +4,7 @@ A produção com dados reais só começa com todos os itens marcados e as assina
 
 ## Técnica
 - [ ] Migrações aplicadas em projeto Supabase de homologação e de produção (mesma versão)
-- [ ] CI verde: tipos, lint, testes de domínio, 48 testes de RLS e build
+- [ ] CI verde: tipos, lint, testes de domínio, 54 testes de RLS e build
 - [ ] Cadastro aberto desativado; templates de e-mail com `/auth/callback`
 - [ ] `SUPABASE_SECRET_KEY` apenas nas variáveis de servidor da Vercel
 - [ ] Teste manual com um usuário de cada papel (admin, RH, DP, gestor, diretoria, colaborador)
@@ -22,6 +22,8 @@ A produção com dados reais só começa com todos os itens marcados e as assina
       incluindo o método de médias e a tributação do IRRF
 - [ ] Envio, download e exclusão de documentos testados em cada aba (Colaboradores, RH, DP) e
       documento "visível a todos" conferido com um usuário colaborador
+- [ ] Comercial validou os planos de comissão (faixas, categorias, base venda/recebido) com um mês real
+      e a planilha exportada do sistema de vendas foi importada sem linhas ignoradas
 - [ ] DP validou rubricas, incidências e a regra de DSR/faltas usada na prévia
 - [ ] RH validou as definições de indicador (rotatividade, tempo de casa) da tela Análises
 - [ ] Relatórios exportados conferidos contra a base (Excel, CSV e PDF) e registro em `report_exports` revisado

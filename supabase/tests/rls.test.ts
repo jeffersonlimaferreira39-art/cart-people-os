@@ -541,3 +541,63 @@ describe("documentos do RH e do DP", () => {
     expect(r.rowCount).toBe(0);
   });
 });
+
+describe("comissões", () => {
+  let planId = "";
+  let saleId = "";
+  beforeAll(async () => {
+    await asCommit(users.adminA, async (q) => {
+      planId = (await q("insert into commission_plans (organization_id, name, default_rate) values ($1, 'Vendas loja', 3) returning id", [ORG_A])).rows[0].id;
+      await q("insert into employee_commission (employee_id, organization_id, unit_id, plan_id, monthly_target) values ($1, $2, $3, $4, 50000)", [emp.colab1, ORG_B, B1, planId]);
+      saleId = (await q("insert into sales (employee_id, organization_id, unit_id, sale_date, order_number, category, amount) values ($1, $2, $3, '2026-10-05', 'P-1', 'planejados', 12000) returning id", [emp.colab1, ORG_A, U1])).rows[0].id;
+      await q("insert into sale_payments (sale_id, organization_id, unit_id, paid_at, amount) values ($1, $2, $3, '2026-10-10', 4000)", [saleId, ORG_B, B1]);
+    });
+  });
+  const count = (user: string, t: string) => as(user, (q) => q(`select count(*)::int n from ${t}`)).then((r) => r.rows[0].n as number);
+
+  it("escopo vem do vendedor e da venda (organização/unidade enviadas são corrigidas)", async () => {
+    const a = await db.query("select organization_id, unit_id from employee_commission where employee_id = $1", [emp.colab1]);
+    const p = await db.query("select organization_id, unit_id from sale_payments where sale_id = $1", [saleId]);
+    expect(a.rows[0]).toEqual({ organization_id: ORG_A, unit_id: U1 });
+    expect(p.rows[0]).toEqual({ organization_id: ORG_A, unit_id: U1 });
+  });
+
+  it("RH/DP da unidade veem; outra unidade, gestor, diretoria e outra organização não", async () => {
+    expect(await count(users.rhU1, "sales")).toBe(1);
+    expect(await count(users.dpU1, "sale_payments")).toBe(1);
+    for (const u of [users.gestor, users.diretoria, users.adminB, users.colab2]) {
+      expect(await count(u, "sales")).toBe(0);
+      expect(await count(u, "employee_commission")).toBe(0);
+      expect(await count(u, "sale_payments")).toBe(0);
+    }
+  });
+
+  it("vendedor lê as próprias vendas, recebimentos e meta, mas não altera", async () => {
+    expect(await count(users.colab1, "sales")).toBe(1);
+    expect(await count(users.colab1, "sale_payments")).toBe(1);
+    expect(await count(users.colab1, "employee_commission")).toBe(1);
+    const r = await as(users.colab1, (q) => q("update sales set amount = 999999 returning 1"));
+    expect(r.rowCount).toBe(0);
+    await expect(
+      as(users.colab1, (q) => q("insert into sales (employee_id, organization_id, unit_id, sale_date, amount) values ($1, $2, $3, '2026-10-06', 5000)", [emp.colab1, ORG_A, U1])),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("planos: membros leem; só Admin/RH/DP da organização inteira alteram", async () => {
+    expect(await count(users.colab1, "commission_plans")).toBe(1);
+    expect(await count(users.adminB, "commission_plans")).toBe(0);
+    await expect(as(users.rhU1, (q) => q("insert into commission_plans (organization_id, name) values ($1, 'X')", [ORG_A]))).rejects.toThrow(/row-level security/);
+  });
+
+  it("mesmo pedido não entra duas vezes para o mesmo vendedor", async () => {
+    await expect(
+      as(users.adminA, (q) => q("insert into sales (employee_id, organization_id, unit_id, sale_date, order_number, amount) values ($1, $2, $3, '2026-10-07', 'P-1', 100)", [emp.colab1, ORG_A, U1])),
+    ).rejects.toThrow(/duplicate key/);
+  });
+
+  it("DP da unidade 1 não lança venda de vendedor da unidade 2", async () => {
+    await expect(
+      as(users.dpU1, (q) => q("insert into sales (employee_id, organization_id, unit_id, sale_date, amount) values ($1, $2, $3, '2026-10-06', 100)", [emp.colab2, ORG_A, U1])),
+    ).rejects.toThrow(/row-level security/);
+  });
+});

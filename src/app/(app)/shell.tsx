@@ -63,6 +63,7 @@ const buildNav = cache(async (viewer: Viewer): Promise<NavGroup[]> => {
         ? [{ href: "/dp", label: "Movimentações", icon: "dp" as const, badge: pendingDp }]
         : []),
       ...(viewerCan(viewer, "viewSensitive") ? [{ href: "/dp/folha", label: "Prévia da folha", icon: "folha" as const }] : []),
+      ...(viewerCan(viewer, "viewSensitive") ? [{ href: "/comissoes", label: "Comissões", icon: "comissoes" as const }] : []),
       ...(viewerCan(viewer, "viewTime") ? [{ href: "/ponto", label: "Ponto", icon: "ponto" as const }] : []),
     ],
   };

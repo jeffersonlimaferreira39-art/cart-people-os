@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewer } from "@/lib/auth/viewer";
 import { getEmployeePayroll, getMyPayroll, getPayrollTables, listEntries } from "@/lib/data/payroll";
+import { getMySettlement } from "@/lib/data/commissions";
+import { categoryLabel } from "@/lib/domain/commission-import";
 import { addMonths, todayIn } from "@/lib/domain/dates";
 import { ENTRY_CODES, ITEM_CODES } from "@/lib/domain/payroll";
 import { formatDate, formatMoney, formatPeriod } from "@/lib/format";
@@ -69,6 +71,7 @@ async function Content({ searchParams }: { searchParams: PageProps<"/meus-dados/
     decimoKind ? getMyPayroll(viewer, period, decimoKind) : Promise.resolve([]),
     getMyPayroll(viewer, period, "ferias"),
   ]);
+  const commission = await getMySettlement(viewer, period);
   const extras = [
     ...decimo.filter((r) => r.result.status === "calculada").map((r) => ({
       key: `13-${r.key}`,
@@ -142,6 +145,26 @@ async function Content({ searchParams }: { searchParams: PageProps<"/meus-dados/
         </div>
 
         <aside className="flex min-w-0 flex-col gap-8">
+          {commission?.result ? (
+            <section>
+              <SectionTitle>Minhas vendas e comissão</SectionTitle>
+              <Panel>
+                <Facts
+                  items={[
+                    [commission.plan?.base === "recebimento" ? "Recebido no mês" : "Vendido no mês", formatMoney(commission.result.base)],
+                    ...(commission.result.target
+                      ? ([
+                          ["Meta", formatMoney(commission.result.target)],
+                          ["Atingimento", `${(commission.result.attainment ?? 0).toLocaleString("pt-BR")}%`],
+                        ] as [string, string][])
+                      : []),
+                    ...commission.result.lines.map((l) => [`${categoryLabel(l.category)} (${l.rate.toLocaleString("pt-BR")}%)`, formatMoney(l.commission)] as [string, string]),
+                    ["Comissão estimada", formatMoney(commission.result.total)],
+                  ]}
+                />
+              </Panel>
+            </section>
+          ) : null}
           <section>
             <SectionTitle>Benefícios</SectionTitle>
             <Panel>
