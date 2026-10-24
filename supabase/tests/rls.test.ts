@@ -1,0 +1,342 @@
+/**
+ * Testes de isolamento RLS e regras de fluxo, executados contra um Postgres real
+ * com as migrações aplicadas (ver scripts/test-db.sh).
+ *
+ * Cenário: organização A com unidades U1 e U2; organização B com unidade B1.
+ */
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import pg from "pg";
+import { randomUUID } from "node:crypto";
+
+const DATABASE_URL = process.env.TEST_DATABASE_URL;
+if (!DATABASE_URL) throw new Error("Defina TEST_DATABASE_URL");
+
+const db = new pg.Client({ connectionString: DATABASE_URL });
+
+const id = () => randomUUID();
+const ORG_A = id(), ORG_B = id();
+const U1 = id(), U2 = id(), B1 = id();
+const users = {
+  adminA: id(), rhU1: id(), dpU1: id(), dp2U1: id(), diretoria: id(),
+  gestor: id(), colab1: id(), colab2: id(), adminB: id(), unitAdminU1: id(),
+};
+const emp = { gestor: id(), colab1: id(), colab2: id(), b1: id() };
+
+type Q = (sql: string, params?: unknown[]) => Promise<pg.QueryResult>;
+
+/** Executa fn como usuário autenticado (ou anon) dentro de uma transação revertida. */
+async function as<T>(userId: string | null, fn: (q: Q) => Promise<T>): Promise<T> {
+  await db.query("begin");
+  try {
+    if (userId) {
+      await db.query("set local role authenticated");
+      await db.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify({ sub: userId, role: "authenticated" }),
+      ]);
+    } else {
+      await db.query("set local role anon");
+    }
+    return await fn((sql, params) => db.query(sql, params));
+  } finally {
+    await db.query("rollback");
+  }
+}
+
+/** Como as(), mas confirma a transação (para encadear passos de um fluxo). */
+async function asCommit<T>(userId: string, fn: (q: Q) => Promise<T>): Promise<T> {
+  await db.query("begin");
+  try {
+    await db.query("set local role authenticated");
+    await db.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: userId, role: "authenticated" }),
+    ]);
+    const r = await fn((sql, params) => db.query(sql, params));
+    await db.query("commit");
+    return r;
+  } catch (e) {
+    await db.query("rollback");
+    throw e;
+  }
+}
+
+beforeAll(async () => {
+  await db.connect();
+  const q = (s: string, p?: unknown[]) => db.query(s, p);
+  for (const [name, uid] of Object.entries(users)) {
+    await q("insert into auth.users (id, email) values ($1, $2)", [uid, `${name}@teste.dev`]);
+  }
+  await q("insert into organizations (id, name) values ($1, 'Org A'), ($2, 'Org B')", [ORG_A, ORG_B]);
+  await q(
+    `insert into units (id, organization_id, name, code) values
+     ($1, $4, 'Unidade 1', 'U1'), ($2, $4, 'Unidade 2', 'U2'), ($3, $5, 'Unidade B', 'B1')`,
+    [U1, U2, B1, ORG_A, ORG_B],
+  );
+  const m = `insert into memberships (user_id, organization_id, unit_id, role) values ($1, $2, $3, $4)`;
+  await q(m, [users.adminA, ORG_A, null, "admin"]);
+  await q(m, [users.rhU1, ORG_A, U1, "rh"]);
+  await q(m, [users.dpU1, ORG_A, U1, "dp"]);
+  await q(m, [users.dp2U1, ORG_A, U1, "dp"]);
+  await q(m, [users.diretoria, ORG_A, null, "diretoria"]);
+  await q(m, [users.gestor, ORG_A, U1, "gestor"]);
+  await q(m, [users.colab1, ORG_A, U1, "colaborador"]);
+  await q(m, [users.colab2, ORG_A, U2, "colaborador"]);
+  await q(m, [users.adminB, ORG_B, null, "admin"]);
+  await q(m, [users.unitAdminU1, ORG_A, U1, "admin"]);
+
+  const e = `insert into employees (id, organization_id, unit_id, user_id, manager_id, registration_number, full_name, hire_date)
+             values ($1, $2, $3, $4, $5, $6, $7, '2024-01-10')`;
+  await q(e, [emp.gestor, ORG_A, U1, users.gestor, null, "001", "Gestora Um"]);
+  await q(e, [emp.colab1, ORG_A, U1, users.colab1, emp.gestor, "002", "Colaborador Um"]);
+  await q(e, [emp.colab2, ORG_A, U2, users.colab2, null, "003", "Colaboradora Dois"]);
+  await q(e, [emp.b1, ORG_B, B1, null, null, "001", "Pessoa da Org B"]);
+
+  const s = `insert into employee_sensitive (employee_id, organization_id, unit_id, cpf, base_salary)
+             values ($1, $2, $3, $4, $5)`;
+  // organization_id/unit_id enviados errados de propósito: o trigger deve corrigir.
+  await q(s, [emp.colab1, ORG_B, B1, "12345678901", 4200]);
+  await q(s, [emp.colab2, ORG_A, U2, "10987654321", 3900]);
+});
+
+afterAll(async () => {
+  await db.end();
+});
+
+const names = (r: pg.QueryResult) => r.rows.map((x) => x.full_name).sort();
+
+describe("isolamento entre organizações e unidades", () => {
+  it("anon não lê nenhuma tabela de pessoas", async () => {
+    await expect(as(null, (q) => q("select * from employees"))).rejects.toThrow(/permission denied/);
+  });
+
+  it("admin da organização A vê as duas unidades e nada da organização B", async () => {
+    const r = await as(users.adminA, (q) => q("select full_name from employees"));
+    expect(names(r)).toEqual(["Colaborador Um", "Colaboradora Dois", "Gestora Um"]);
+  });
+
+  it("admin da organização B não vê ninguém da organização A", async () => {
+    const r = await as(users.adminB, (q) => q("select full_name from employees"));
+    expect(names(r)).toEqual(["Pessoa da Org B"]);
+  });
+
+  it("RH da unidade 1 vê apenas a unidade 1", async () => {
+    const r = await as(users.rhU1, (q) => q("select full_name from employees"));
+    expect(names(r)).toEqual(["Colaborador Um", "Gestora Um"]);
+  });
+
+  it("RH da unidade 1 não cadastra colaborador na unidade 2", async () => {
+    await expect(
+      as(users.rhU1, (q) =>
+        q(
+          `insert into employees (organization_id, unit_id, registration_number, full_name, hire_date)
+           values ($1, $2, '999', 'Tentativa Indevida', '2025-01-01')`,
+          [ORG_A, U2],
+        ),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("RH da unidade 1 não grava dados sensíveis de colaborador da unidade 2", async () => {
+    await expect(
+      as(users.rhU1, (q) =>
+        q("update employee_sensitive set base_salary = 1 where employee_id = $1 returning 1", [emp.colab2]),
+      ),
+    ).resolves.toHaveProperty("rowCount", 0);
+  });
+
+  it("o trigger de escopo corrige organização/unidade enviadas pelo cliente", async () => {
+    const r = await db.query("select organization_id, unit_id from employee_sensitive where employee_id = $1", [
+      emp.colab1,
+    ]);
+    expect(r.rows[0]).toEqual({ organization_id: ORG_A, unit_id: U1 });
+  });
+});
+
+describe("papéis e dados sensíveis", () => {
+  it("colaborador vê só o próprio cadastro", async () => {
+    const r = await as(users.colab1, (q) => q("select full_name from employees"));
+    expect(names(r)).toEqual(["Colaborador Um"]);
+  });
+
+  it("gestor vê a si e aos liderados", async () => {
+    const r = await as(users.gestor, (q) => q("select full_name from employees"));
+    expect(names(r)).toEqual(["Colaborador Um", "Gestora Um"]);
+  });
+
+  it("gestor não vê salário dos liderados", async () => {
+    const r = await as(users.gestor, (q) => q("select * from employee_sensitive"));
+    expect(r.rowCount).toBe(0);
+  });
+
+  it("diretoria vê o quadro, mas nenhum dado sensível", async () => {
+    const all = await as(users.diretoria, (q) => q("select full_name from employees"));
+    expect(all.rowCount).toBe(3);
+    const s = await as(users.diretoria, (q) => q("select * from employee_sensitive"));
+    expect(s.rowCount).toBe(0);
+  });
+
+  it("colaborador lê os próprios dados sensíveis, mas não os altera", async () => {
+    const r = await as(users.colab1, (q) => q("select cpf from employee_sensitive"));
+    expect(r.rows).toEqual([{ cpf: "12345678901" }]);
+    const u = await as(users.colab1, (q) =>
+      q("update employee_sensitive set base_salary = 99999 where employee_id = $1", [emp.colab1]),
+    );
+    expect(u.rowCount).toBe(0);
+  });
+
+  it("colaborador não concede papel a si mesmo", async () => {
+    await expect(
+      as(users.colab1, (q) =>
+        q("insert into memberships (user_id, organization_id, role) values ($1, $2, 'admin')", [users.colab1, ORG_A]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("admin de unidade não cria outro admin", async () => {
+    await expect(
+      as(users.unitAdminU1, (q) =>
+        q("insert into memberships (user_id, organization_id, unit_id, role) values ($1, $2, $3, 'admin')", [
+          users.colab1, ORG_A, U1,
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("impede ciclo de gestão", async () => {
+    await expect(
+      as(users.rhU1, (q) => q("update employees set manager_id = $1 where id = $2", [emp.colab1, emp.gestor])),
+    ).rejects.toThrow(/Ciclo de gestão/);
+  });
+});
+
+describe("fluxo de férias e ausências", () => {
+  let leaveId = "";
+
+  it("colaborador solicita férias e o status nasce pendente", async () => {
+    const r = await asCommit(users.colab1, (q) =>
+      q(
+        `insert into leave_requests (employee_id, organization_id, unit_id, type, start_date, end_date, status)
+         values ($1, $2, $3, 'ferias', '2026-12-07', '2026-12-21', 'approved') returning id, status, days`,
+        [emp.colab1, ORG_A, U1],
+      ),
+    );
+    leaveId = r.rows[0].id;
+    expect(r.rows[0]).toMatchObject({ status: "pending", days: 15 });
+  });
+
+  it("colaborador não aprova a própria solicitação", async () => {
+    await expect(
+      as(users.colab1, (q) => q("update leave_requests set status = 'approved' where id = $1", [leaveId])),
+    ).rejects.toThrow(/Somente o gestor|própria/);
+  });
+
+  it("colaborador de outra unidade nem enxerga a solicitação", async () => {
+    const r = await as(users.colab2, (q) => q("select id from leave_requests"));
+    expect(r.rowCount).toBe(0);
+  });
+
+  it("pedido sobreposto é recusado", async () => {
+    await expect(
+      as(users.colab1, (q) =>
+        q(
+          `insert into leave_requests (employee_id, organization_id, unit_id, type, start_date, end_date)
+           values ($1, $2, $3, 'folga', '2026-12-10', '2026-12-10')`,
+          [emp.colab1, ORG_A, U1],
+        ),
+      ),
+    ).rejects.toThrow(/mesmo período/);
+  });
+
+  it("gestor aprova e o sistema registra quem decidiu", async () => {
+    const r = await asCommit(users.gestor, (q) =>
+      q("update leave_requests set status = 'approved' where id = $1 returning status, decided_by", [leaveId]),
+    );
+    expect(r.rows[0]).toEqual({ status: "approved", decided_by: users.gestor });
+  });
+
+  it("solicitação aprovada não tem as datas alteradas", async () => {
+    await expect(
+      as(users.rhU1, (q) => q("update leave_requests set end_date = '2026-12-31' where id = $1", [leaveId])),
+    ).rejects.toThrow(/não pode ser alterada/);
+  });
+
+  it("colaborador não cancela férias já aprovadas", async () => {
+    await expect(
+      as(users.colab1, (q) => q("update leave_requests set status = 'cancelled' where id = $1", [leaveId])),
+    ).rejects.toThrow(/não pode mais ser cancelada/);
+  });
+});
+
+describe("movimentações do DP", () => {
+  let eventId = "";
+
+  it("gestor e colaborador não enxergam movimentações", async () => {
+    await asCommit(users.dpU1, (q) =>
+      q(
+        `insert into dp_events (employee_id, organization_id, unit_id, type, effective_date, payload, status)
+         values ($1, $2, $3, 'alteracao_salarial', '2026-11-01', '{"novo_salario": 4600}', 'submitted') returning id`,
+        [emp.colab1, ORG_A, U1],
+      ).then((r) => (eventId = r.rows[0].id)),
+    );
+    for (const u of [users.gestor, users.colab1]) {
+      const r = await as(u, (q) => q("select id from dp_events"));
+      expect(r.rowCount).toBe(0);
+    }
+  });
+
+  it("quem cadastrou não aprova (segregação de funções)", async () => {
+    await expect(
+      as(users.dpU1, (q) => q("update dp_events set status = 'approved' where id = $1", [eventId])),
+    ).rejects.toThrow(/segregação/);
+  });
+
+  it("outro analista de DP aprova", async () => {
+    const r = await asCommit(users.dp2U1, (q) =>
+      q("update dp_events set status = 'approved' where id = $1 returning approved_by", [eventId]),
+    );
+    expect(r.rows[0].approved_by).toBe(users.dp2U1);
+  });
+
+  it("movimentação aprovada não tem o conteúdo alterado", async () => {
+    await expect(
+      as(users.dp2U1, (q) => q(`update dp_events set payload = '{"novo_salario": 9999}' where id = $1`, [eventId])),
+    ).rejects.toThrow(/Somente rascunhos/);
+  });
+
+  it("exportação exige lote", async () => {
+    await expect(
+      as(users.dp2U1, (q) => q("update dp_events set status = 'exported' where id = $1", [eventId])),
+    ).rejects.toThrow(/lote/);
+  });
+});
+
+describe("auditoria", () => {
+  it("admin da organização lê a trilha; RH de unidade não", async () => {
+    const a = await as(users.adminA, (q) => q("select count(*)::int as n from audit_log"));
+    expect(a.rows[0].n).toBeGreaterThan(0);
+    const r = await as(users.rhU1, (q) => q("select count(*)::int as n from audit_log"));
+    expect(r.rows[0].n).toBe(0);
+  });
+
+  it("admin da organização B não vê a trilha da organização A", async () => {
+    const r = await as(users.adminB, (q) =>
+      q("select count(*)::int as n from audit_log where organization_id = $1", [ORG_A]),
+    );
+    expect(r.rows[0].n).toBe(0);
+  });
+
+  it("dados sensíveis são auditados sem valores", async () => {
+    const r = await db.query(
+      "select old_data, new_data from audit_log where table_name = 'employee_sensitive' and record_id = $1",
+      [emp.colab1],
+    );
+    expect(r.rowCount).toBeGreaterThan(0);
+    for (const row of r.rows) {
+      expect(row.old_data).toBeNull();
+      expect(row.new_data).toBeNull();
+    }
+  });
+
+  it("ninguém apaga a trilha de auditoria", async () => {
+    await expect(as(users.adminA, (q) => q("delete from audit_log"))).rejects.toThrow(/permission denied/);
+  });
+});

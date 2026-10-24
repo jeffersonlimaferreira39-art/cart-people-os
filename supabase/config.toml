@@ -1,0 +1,28 @@
+# Configuração do Supabase CLI para desenvolvimento local (`supabase start`).
+# Em produção, replique as opções de Auth no painel do projeto (ver README).
+project_id = "cart-people-os"
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+# Ninguém se cadastra sozinho: acesso só por convite do administrador.
+enable_signup = false
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.rate_limit]
+email_sent = 10
+
+[storage]
+file_size_limit = "10MiB"
