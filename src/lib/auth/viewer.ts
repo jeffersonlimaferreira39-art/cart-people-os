@@ -35,16 +35,21 @@ export const getViewer = cache(async (): Promise<Viewer> => {
   const claims = claimsData?.claims;
   if (!claims?.sub) redirect("/login");
 
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("role, unit_id, organization_id, organization:organizations(id, name)")
-    .eq("user_id", claims.sub)
-    .eq("active", true);
+  // Papéis (com organização e unidades embutidas) e cadastro em paralelo: uma viagem ao banco.
+  const [{ data: memberships }, { data: employee }] = await Promise.all([
+    supabase
+      .from("memberships")
+      .select("role, unit_id, organization_id, organization:organizations(id, name, units(id, name, code, city, state, timezone, active))")
+      .eq("user_id", claims.sub)
+      .eq("active", true),
+    supabase.from("employees").select("id, full_name, unit_id").eq("user_id", claims.sub).maybeSingle(),
+  ]);
 
   if (!memberships?.length) redirect("/sem-acesso");
 
   // Uma organização por sessão; a primeira encontrada é a ativa.
-  const orgRow = memberships[0].organization as unknown as { id: string; name: string };
+  const orgFull = memberships[0].organization as unknown as { id: string; name: string; units: Unit[] | null };
+  const orgRow = { id: orgFull.id, name: orgFull.name };
   const mine = memberships.filter((m) => m.organization_id === orgRow.id);
   const scopes = mine
     .filter((m) => isRole(m.role))
@@ -52,14 +57,7 @@ export const getViewer = cache(async (): Promise<Viewer> => {
   const roles = [...new Set(scopes.map((s) => s.role))];
   const orgWide = scopes.some((s) => s.unitId === null);
 
-  const [{ data: unitRows }, { data: employee }] = await Promise.all([
-    supabase
-      .from("units")
-      .select("id, name, code, city, state, timezone, active")
-      .eq("organization_id", orgRow.id)
-      .order("name"),
-    supabase.from("employees").select("id, full_name, unit_id").eq("user_id", claims.sub).maybeSingle(),
-  ]);
+  const unitRows = [...(orgFull.units ?? [])].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const scopedUnitIds = new Set(scopes.map((s) => s.unitId).filter(Boolean) as string[]);
   const units = ((unitRows ?? []) as Unit[]).filter((u) => orgWide || scopedUnitIds.has(u.id));

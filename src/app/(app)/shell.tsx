@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getViewer, viewerCan, type Viewer } from "@/lib/auth/viewer";
@@ -8,23 +9,32 @@ import { MobileNav } from "@/components/shell/mobile-nav";
 import { UnitSwitcher } from "@/components/shell/unit-switcher";
 import { signOut } from "./shell-actions";
 
-async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
+// Uma vez por requisição: o menu lateral e o do celular usam o mesmo resultado.
+const buildNav = cache(async (viewer: Viewer): Promise<NavGroup[]> => {
   const supabase = await createClient();
   const unit = viewer.selectedUnitId;
   let pendingLeaves = 0;
   let pendingDp = 0;
 
-  if (viewerCan(viewer, "decideLeaves")) {
-    let q = supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending");
-    if (unit) q = q.eq("unit_id", unit);
-    if (viewer.employee) q = q.neq("employee_id", viewer.employee.id);
-    pendingLeaves = (await q).count ?? 0;
-  }
-  if (viewerCan(viewer, "manageDp")) {
-    let q = supabase.from("dp_events").select("id", { count: "exact", head: true }).eq("status", "submitted");
-    if (unit) q = q.eq("unit_id", unit);
-    pendingDp = (await q).count ?? 0;
-  }
+  // Contadores em paralelo: cada ida ao banco custa uma viagem de rede.
+  const leavesQ = viewerCan(viewer, "decideLeaves")
+    ? (() => {
+        let q = supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending");
+        if (unit) q = q.eq("unit_id", unit);
+        if (viewer.employee) q = q.neq("employee_id", viewer.employee.id);
+        return q;
+      })()
+    : null;
+  const dpQ = viewerCan(viewer, "manageDp")
+    ? (() => {
+        let q = supabase.from("dp_events").select("id", { count: "exact", head: true }).eq("status", "submitted");
+        if (unit) q = q.eq("unit_id", unit);
+        return q;
+      })()
+    : null;
+  const [leavesRes, dpRes] = await Promise.all([leavesQ, dpQ]);
+  pendingLeaves = leavesRes?.count ?? 0;
+  pendingDp = dpRes?.count ?? 0;
 
   const people: NavGroup = {
     label: "Pessoas",
@@ -75,7 +85,7 @@ async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
     items: viewer.employee ? [{ href: "/meus-dados", label: "Meus dados", icon: "meus-dados" }] : [],
   };
   return [people, insights, dp, admin, me].filter((g) => g.items.length);
-}
+});
 
 export async function SidebarNav() {
   const viewer = await getViewer();
