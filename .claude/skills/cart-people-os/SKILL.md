@@ -60,7 +60,7 @@ Não troque peças da stack sem registrar a decisão em `docs/adr/`.
 
 ## Design system
 
-Identidade inspirada em ambientação de interiores: barra lateral verde-eucalipto, fundo pedra fria, latão como acento de atenção, tipografia Schibsted Grotesk com numerais tabulares. Modo claro e escuro via tokens CSS. Tabelas densas com filetes, não grades de cartões. Texto em português claro, voz ativa, botões que dizem o que fazem ("Aprovar férias", não "Enviar").
+Identidade "centro de comando" (ADR 0002): trilho lateral grafite com a logo da C'Art, superfícies translúcidas (`.glass`) sobre grade sutil, ciano como ação, vermelho da marca como destaque, âmbar para atenção. Schibsted Grotesk no texto e JetBrains Mono em métricas e rótulos técnicos (`.eyebrow`). Tema escuro padrão, claro disponível, tudo via tokens CSS. Gráficos só com `src/components/charts/` e as cores `--series-*` validadas para daltonismo. Tabelas densas com filetes, não grades de cartões. Texto em português claro, voz ativa, botões que dizem o que fazem ("Aprovar férias", não "Enviar").
 
 ## Definição de pronto
 

@@ -16,11 +16,11 @@ function NavFallback() {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[252px_minmax(0,1fr)] lg:bg-[linear-gradient(90deg,var(--brand)_252px,var(--bg)_252px)]">
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto bg-brand px-3 py-5 lg:flex">
+    <div className="app-shell min-h-dvh lg:grid lg:grid-cols-[252px_minmax(0,1fr)]">
+      <aside className="no-print sticky top-0 hidden h-dvh flex-col gap-6 overflow-y-auto border-r border-white/[0.06] bg-[linear-gradient(180deg,var(--brand-2),var(--brand)_40%)] px-3 py-5 lg:flex">
         <div className="px-3">
           <BrandLogo variant="brand" className="h-10" />
-          <p className="mt-2 text-[13px] font-semibold text-brand-ink">People OS</p>
+          <p className="eyebrow mt-3 !text-[10.5px] text-[#2dd4c4]">People OS</p>
           <p className="mt-0.5 text-[12.5px] text-brand-ink-2">
             <Suspense fallback="Carregando…">
               <OrgName />
@@ -38,7 +38,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/90 px-4 backdrop-blur sm:px-6">
+        <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/70 px-4 backdrop-blur-md sm:px-6">
           <Suspense fallback={<div className="size-9 lg:hidden" />}>
             <MobileMenu />
           </Suspense>

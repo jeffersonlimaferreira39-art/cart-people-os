@@ -1,7 +1,8 @@
 # C'Art People OS
 
 Plataforma de RH + Departamento Pessoal da C'Art Ambientações: cadastro de colaboradores, férias e
-ausências, movimentações do DP com envio à folha, ponto importado, indicadores e assistente de IA.
+ausências, movimentações do DP com envio à folha, ponto importado, painel e análises com gráficos,
+relatórios em Excel/CSV/PDF e assistente de IA.
 Multiunidade, com controle de acesso no banco (RLS), auditoria e cuidados de LGPD.
 
 > O People OS **não** calcula folha oficial nem transmite ao eSocial. Ele organiza dados, fluxos e
@@ -19,7 +20,9 @@ src/app/(app)/        telas autenticadas (painel, colaboradores, ausencias, dp, 
 src/app/login/        login por senha ou link por e-mail
 src/lib/auth/         sessão, papéis e unidade em foco (viewer)
 src/lib/data/         consultas ao Supabase (sempre com a sessão do usuário)
-src/lib/domain/       regras puras: CLT de férias, CPF/PIS, CSV, movimentações, papéis
+src/lib/domain/       regras puras: CLT de férias, CPF/PIS, CSV, movimentações, papéis, indicadores
+src/lib/reports/      catálogo e montagem de relatórios (Excel, CSV, PDF) + registro de exportação
+src/components/charts/ gráficos SVG (linha, colunas, barras) com tooltip e tabela equivalente
 src/lib/integrations/ adaptadores de ponto e de folha
 src/lib/ai/           assistente e ferramentas somente leitura
 supabase/migrations/  esquema, RLS, regras de fluxo e auditoria (fonte da verdade)
@@ -69,7 +72,7 @@ npm run dev
 
 ```bash
 npm run verify    # tipos, lint e testes de domínio
-npm run test:db   # migrações + 31 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
+npm run test:db   # migrações + 34 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
 npm run build
 ```
 

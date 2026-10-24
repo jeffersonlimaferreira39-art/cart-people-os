@@ -4,56 +4,70 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design system C'Art People OS
- * Materiais de ambientação: pedra fria (fundo), eucalipto (marca), latão (atenção).
+ * Design system C'Art People OS — "centro de comando".
+ * Trilho lateral grafite em ambos os temas, superfícies translúcidas sobre uma
+ * grade sutil, ciano como ação/sinal e o vermelho da marca como destaque.
+ * Cores de gráfico (--series-*) validadas para daltonismo nos dois temas.
  */
 :root {
-  --bg: #f2f4f3;
+  --bg: #edf1f6;
   --surface: #ffffff;
-  --surface-2: #eaeeec;
-  --ink: #17201e;
-  --ink-2: #4a5754;
-  --ink-3: #75827f;
-  --line: #d8dfdc;
-  --line-strong: #b9c4c0;
-  --brand: #1d4a41;
-  --brand-2: #255a4f;
-  --brand-ink: #e2ede9;
-  --brand-ink-2: #a9c5bc;
-  --accent: #2b6b5d;
-  --accent-hover: #235a4e;
+  --surface-2: #f1f4f8;
+  --ink: #0b1220;
+  --ink-2: #44526a;
+  --ink-3: #6b7a90;
+  --line: #dde4ee;
+  --line-strong: #c4cfdd;
+  --brand: #0a111b;
+  --brand-2: #121c2a;
+  --brand-ink: #e6eef7;
+  --brand-ink-2: #8193a9;
+  --accent: #00796f;
+  --accent-hover: #00655d;
   --accent-ink: #ffffff;
-  --accent-soft: #e0ede9;
-  --brass: #9a7124;
-  --brass-soft: #f5ecd9;
-  --danger: #a33d36;
-  --danger-soft: #f7e3e1;
-  --focus: #c0912f;
+  --accent-soft: #dcf3f0;
+  --brass: #9a5b00;
+  --brass-soft: #fbefd9;
+  --danger: #c22e3f;
+  --danger-soft: #fbe3e6;
+  --focus: #00968a;
+  --signal: #e3262b;
+  --glow: rgb(0 150 138 / 0.14);
+  --grid: rgb(11 18 32 / 0.045);
+  --series-1: #00968a;
+  --series-2: #d6455a;
+  --chart-grid: #e3e9f1;
   color-scheme: light;
 }
 
 .dark {
-  --bg: #111715;
-  --surface: #182120;
-  --surface-2: #1f2a28;
-  --ink: #e2e9e6;
-  --ink-2: #a7b4b0;
-  --ink-3: #7b8885;
-  --line: #2a3533;
-  --line-strong: #3a4744;
-  --brand: #0d2420;
-  --brand-2: #143530;
-  --brand-ink: #cfe0da;
-  --brand-ink-2: #86a79d;
-  --accent: #6cb3a1;
-  --accent-hover: #83c3b3;
-  --accent-ink: #0c1a17;
-  --accent-soft: #1d3530;
-  --brass: #d6aa55;
-  --brass-soft: #33291a;
-  --danger: #e5847a;
-  --danger-soft: #3a2220;
-  --focus: #d6aa55;
+  --bg: #05080d;
+  --surface: #0b121b;
+  --surface-2: #111b27;
+  --ink: #e6eef7;
+  --ink-2: #9fb0c4;
+  --ink-3: #6c7e94;
+  --line: #1a2633;
+  --line-strong: #2a3a4d;
+  --brand: #070c13;
+  --brand-2: #0d1520;
+  --brand-ink: #e6eef7;
+  --brand-ink-2: #75889f;
+  --accent: #2dd4c4;
+  --accent-hover: #5fe6d9;
+  --accent-ink: #03201d;
+  --accent-soft: #0b2a2c;
+  --brass: #f2b341;
+  --brass-soft: #2b2112;
+  --danger: #ff6474;
+  --danger-soft: #34141b;
+  --focus: #2dd4c4;
+  --signal: #ff3b45;
+  --glow: rgb(45 212 196 / 0.12);
+  --grid: rgb(230 238 247 / 0.035);
+  --series-1: #19a99e;
+  --series-2: #e8505f;
+  --chart-grid: #182432;
   color-scheme: dark;
 }
 
@@ -78,9 +92,13 @@
   --color-brass-soft: var(--brass-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-signal: var(--signal);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, monospace;
   --font-sans: "Schibsted Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
-  --radius-control: 6px;
-  --radius-panel: 10px;
+  --radius-control: 8px;
+  --radius-panel: 14px;
 }
 
 html {
@@ -88,7 +106,15 @@ html {
 }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Grade técnica com brilho no topo: assinatura visual do "centro de comando". */
+  background-image:
+    radial-gradient(1100px 520px at 78% -12%, var(--glow), transparent 70%),
+    radial-gradient(700px 380px at -8% 105%, var(--glow), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -106,6 +132,63 @@ body {
 }
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+/* Rótulo técnico: caixa alta espaçada, usado em métricas e cabeçalhos de seção. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Painel translúcido com filete de luz no topo. */
+.glass {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--surface) 92%, transparent), color-mix(in oklab, var(--surface) 80%, transparent));
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--ink) 6%, transparent),
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 12px 32px -18px rgb(0 0 0 / 0.25);
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  :root,
+  .dark {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3f5f8;
+    --ink: #0b1220;
+    --ink-2: #333d4d;
+    --ink-3: #5b6676;
+    --line: #d5dbe4;
+    --line-strong: #9aa6b6;
+    --accent: #00796f;
+    color-scheme: light;
+  }
+  body {
+    background: #fff !important;
+    font-size: 12px;
+  }
+  .app-shell {
+    display: block !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  thead {
+    display: table-header-group;
+  }
+  .no-print {
+    display: none !important;
+  }
 }
 
 :focus-visible {

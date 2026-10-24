@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getViewer, viewerCan, type Viewer } from "@/lib/auth/viewer";
 import { ROLE_LABELS } from "@/lib/domain/roles";
+import { REPORTS } from "@/lib/reports/catalog";
 import { NavLinks, type NavGroup } from "@/components/shell/nav-links";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { UnitSwitcher } from "@/components/shell/unit-switcher";
@@ -35,6 +36,15 @@ async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
       { href: "/ausencias", label: "Férias e ausências", icon: "ausencias", badge: pendingLeaves },
     ],
   };
+  const insights: NavGroup = {
+    label: "Inteligência",
+    items: [
+      ...(viewerCan(viewer, "viewPeople") ? [{ href: "/analises", label: "Análises", icon: "analises" as const }] : []),
+      ...(Object.values(REPORTS).some((r) => viewerCan(viewer, r.capability))
+        ? [{ href: "/relatorios", label: "Relatórios", icon: "relatorios" as const }]
+        : []),
+    ],
+  };
   const dp: NavGroup = {
     label: "Departamento Pessoal",
     items: [
@@ -62,7 +72,7 @@ async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
     label: "Você",
     items: viewer.employee ? [{ href: "/meus-dados", label: "Meus dados", icon: "meus-dados" }] : [],
   };
-  return [people, dp, admin, me].filter((g) => g.items.length);
+  return [people, insights, dp, admin, me].filter((g) => g.items.length);
 }
 
 export async function SidebarNav() {

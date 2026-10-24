@@ -12,6 +12,11 @@ export const formatDateTime = (iso: string | null | undefined) => (iso ? dateTim
 export const formatMoney = (v: number | null | undefined) => (v === null || v === undefined ? "—" : moneyFmt.format(Number(v)));
 export const formatHours = (minutes: number) => `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
 
+const MONTHS_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+/** "2026-10" → "out" ou "out/26". */
+export const monthLabel = (period: string, withYear = false) =>
+  `${MONTHS_SHORT[Number(period.slice(5, 7)) - 1]}${withYear ? `/${period.slice(2, 4)}` : ""}`;
+
 export function formatPeriod(period: string) {
   const [y, m] = period.split("-").map(Number);
   const text = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));

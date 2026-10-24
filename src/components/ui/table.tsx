@@ -15,7 +15,7 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
     <th
       scope="col"
       className={cn(
-        "border-b border-line px-4 py-2.5 text-left text-[12.5px] font-medium whitespace-nowrap text-ink-3",
+        "eyebrow border-b border-line px-4 py-2.5 text-left !text-[10.5px] whitespace-nowrap text-ink-3",
         className,
       )}
       {...props}
@@ -23,7 +23,7 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
   );
 }
 export function Tr({ className, ...props }: ComponentProps<"tr">) {
-  return <tr className={cn("border-b border-line last:border-b-0 hover:bg-surface-2/60", className)} {...props} />;
+  return <tr className={cn("border-b border-line transition-colors last:border-b-0 hover:bg-accent/[0.05]", className)} {...props} />;
 }
 export function Td({ className, ...props }: ComponentProps<"td">) {
   return <td className={cn("px-4 py-3 align-middle text-ink", className)} {...props} />;

@@ -2,8 +2,8 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "./cn";
 
 const control =
-  "w-full rounded-[var(--radius-control)] border border-line-strong bg-surface px-3 text-sm text-ink " +
-  "placeholder:text-ink-3 focus:border-accent focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 " +
+  "w-full rounded-[var(--radius-control)] border border-line-strong bg-surface/80 px-3 text-sm text-ink " +
+  "placeholder:text-ink-3 focus:border-accent focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--accent)_18%,transparent)] focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 " +
   "disabled:bg-surface-2 disabled:text-ink-3 aria-[invalid=true]:border-danger";
 
 export function Field({

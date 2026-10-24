@@ -340,3 +340,31 @@ describe("auditoria", () => {
     await expect(as(users.adminA, (q) => q("delete from audit_log"))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("registro de exportação de relatórios", () => {
+  const log = (q: Q, user: string, org: string, unit: string | null) =>
+    q("insert into report_exports (organization_id, unit_id, user_id, report, format, row_count) values ($1, $2, $3, 'quadro', 'xlsx', 3)", [
+      org, unit, user,
+    ]);
+
+  it("usuário registra a própria exportação e o admin da organização lê", async () => {
+    await asCommit(users.rhU1, (q) => log(q, users.rhU1, ORG_A, U1));
+    const own = await as(users.rhU1, (q) => q("select count(*)::int as n from report_exports"));
+    expect(own.rows[0].n).toBe(1);
+    const admin = await as(users.adminA, (q) => q("select count(*)::int as n from report_exports"));
+    expect(admin.rows[0].n).toBe(1);
+    const other = await as(users.dpU1, (q) => q("select count(*)::int as n from report_exports"));
+    expect(other.rows[0].n).toBe(0);
+  });
+
+  it("ninguém registra em nome de outro, em outra organização ou com unidade alheia", async () => {
+    await expect(as(users.rhU1, (q) => log(q, users.dpU1, ORG_A, U1))).rejects.toThrow(/row-level security/);
+    await expect(as(users.rhU1, (q) => log(q, users.rhU1, ORG_B, null))).rejects.toThrow(/row-level security/);
+    await expect(as(users.rhU1, (q) => log(q, users.rhU1, ORG_A, B1))).rejects.toThrow(/row-level security/);
+  });
+
+  it("o registro não pode ser alterado nem apagado", async () => {
+    await expect(as(users.adminA, (q) => q("delete from report_exports"))).rejects.toThrow(/permission denied/);
+    await expect(as(users.rhU1, (q) => q("update report_exports set row_count = 0"))).rejects.toThrow(/permission denied/);
+  });
+});

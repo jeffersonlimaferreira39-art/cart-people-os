@@ -3,8 +3,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewer, unitLabel, viewerCan, type Viewer } from "@/lib/auth/viewer";
 import { getDashboardStats } from "@/lib/data/dashboard";
+import { getAnalytics } from "@/lib/data/analytics";
+import { Stat, ChartCard } from "@/components/ui/stat";
+import { ColumnChart, Legend, LineChart } from "@/components/charts/charts";
 import { listMyLeaves } from "@/lib/data/leaves";
-import { LEAVE_STATUS_LABELS, LEAVE_TYPE_LABELS, formatDate } from "@/lib/format";
+import { LEAVE_STATUS_LABELS, LEAVE_TYPE_LABELS, formatDate, monthLabel } from "@/lib/format";
 import { PageHeader, SectionTitle } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +47,8 @@ function greeting(viewer: Viewer) {
 async function Dashboard() {
   const viewer = await getViewer();
   if (!viewerCan(viewer, "viewPeople")) return <PersonalDashboard viewer={viewer} />;
-  const s = await getDashboardStats(viewer);
+  const [s, trend] = await Promise.all([getDashboardStats(viewer), getAnalytics(viewer, 12)]);
+  const labels = trend.series.map((p) => monthLabel(p.period));
   const maxDept = Math.max(1, ...s.byDepartment.map((d) => d.count));
 
   const attention = [
@@ -57,24 +61,50 @@ async function Dashboard() {
 
   return (
     <>
-      <PageHeader title={greeting(viewer)} description={`Visão de ${unitLabel(viewer).toLowerCase() === "todas as unidades" ? "todas as unidades" : unitLabel(viewer)} em ${formatDate(s.today)}.`} />
+      <PageHeader eyebrow="Centro de comando" title={greeting(viewer)} description={`Visão de ${unitLabel(viewer).toLowerCase() === "todas as unidades" ? "todas as unidades" : unitLabel(viewer)} em ${formatDate(s.today)}.`} />
 
-      <Panel className="mb-8">
-        <dl className="grid grid-cols-2 divide-line max-sm:[&>*:nth-child(-n+2)]:border-b sm:grid-cols-4 sm:divide-x">
-          {[
-            ["Pessoas no quadro", s.headcount, s.onboarding ? `${s.onboarding} em admissão` : "ativos e afastados"],
-            ["Admissões no mês", s.hiresThisMonth, "desde o dia 1º"],
-            ["Desligamentos no mês", s.terminationsThisMonth, "desde o dia 1º"],
-            ["Rotatividade em 12 meses", s.turnover12m === null ? "—" : `${s.turnover12m.toLocaleString("pt-BR")}%`, "média de entradas e saídas"],
-          ].map(([label, value, note]) => (
-            <div key={label as string} className="border-line px-5 py-4">
-              <dt className="text-[13px] text-ink-3">{label}</dt>
-              <dd className="tnum mt-1 text-[30px] leading-none font-semibold tracking-[-0.02em] text-ink">{value}</dd>
-              <dd className="mt-1.5 text-[12.5px] text-ink-3">{note}</dd>
-            </div>
-          ))}
-        </dl>
-      </Panel>
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Pessoas no quadro" value={s.headcount} note={s.onboarding ? `${s.onboarding} em admissão` : "ativos e afastados"} tone="accent" />
+        <Stat label="Admissões no mês" value={s.hiresThisMonth} note="desde o dia 1º" />
+        <Stat label="Desligamentos no mês" value={s.terminationsThisMonth} note="desde o dia 1º" tone="signal" />
+        <Stat
+          label="Rotatividade · 12M"
+          value={s.turnover12m === null ? "—" : `${s.turnover12m.toLocaleString("pt-BR")}%`}
+          note="média de entradas e saídas"
+          tone="attention"
+        />
+      </div>
+
+      <div className="mb-8 grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Evolução do quadro"
+          subtitle="Últimos 12 meses"
+          legend={<Link href="/analises" className="eyebrow text-accent hover:underline">Ver análises →</Link>}
+        >
+          <LineChart labels={labels} height={180} series={[{ key: "hc", label: "Quadro", color: "var(--series-1)", values: trend.series.map((p) => p.headcount) }]} />
+        </ChartCard>
+        <ChartCard
+          title="Entradas e saídas"
+          subtitle="Últimos 12 meses"
+          legend={
+            <Legend
+              series={[
+                { key: "in", label: "Admissões", color: "var(--series-1)" },
+                { key: "out", label: "Desligamentos", color: "var(--series-2)" },
+              ]}
+            />
+          }
+        >
+          <ColumnChart
+            labels={labels}
+            height={180}
+            series={[
+              { key: "in", label: "Admissões", color: "var(--series-1)", values: trend.series.map((p) => p.hires) },
+              { key: "out", label: "Desligamentos", color: "var(--series-2)", values: trend.series.map((p) => p.terminations) },
+            ]}
+          />
+        </ChartCard>
+      </div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section>
@@ -85,7 +115,7 @@ async function Dashboard() {
                 {attention.map((a) => (
                   <li key={a.href + a.text} className="border-b border-line last:border-b-0">
                     <Link href={a.href} className="flex items-baseline gap-3 px-4 py-3 hover:bg-surface-2/60">
-                      <span className="tnum min-w-7 text-right text-[18px] font-semibold text-brass">{a.n}</span>
+                      <span className="min-w-7 text-right font-mono text-[17px] font-semibold text-brass">{a.n}</span>
                       <span className="text-ink">{a.text}</span>
                     </Link>
                   </li>
@@ -96,9 +126,9 @@ async function Dashboard() {
             )}
           </Panel>
 
-          <SectionTitle>
-            <span className="mt-8 block">Ausentes hoje</span>
-          </SectionTitle>
+          <div className="mt-8">
+            <SectionTitle>Ausentes hoje</SectionTitle>
+          </div>
           <Panel>
             {s.absentToday.length ? (
               <ul className="divide-y divide-line">
@@ -124,7 +154,7 @@ async function Dashboard() {
                   <li key={d.name} className="grid grid-cols-[minmax(0,9rem)_1fr_2.5rem] items-center gap-3 text-sm">
                     <span className="truncate text-ink-2" title={d.name}>{d.name}</span>
                     <span className="h-2.5 rounded-full bg-surface-2" aria-hidden>
-                      <span className="block h-full rounded-full bg-accent" style={{ width: `${(d.count / maxDept) * 100}%` }} />
+                      <span className="block h-full rounded-full bg-accent dark:shadow-[0_0_10px_var(--accent)]" style={{ width: `${(d.count / maxDept) * 100}%` }} />
                     </span>
                     <span className="tnum text-right font-medium text-ink">{d.count}</span>
                   </li>
@@ -138,9 +168,9 @@ async function Dashboard() {
             )}
           </Panel>
 
-          <SectionTitle>
-            <span className="mt-8 block">Tempo de casa neste mês</span>
-          </SectionTitle>
+          <div className="mt-8">
+            <SectionTitle>Tempo de casa neste mês</SectionTitle>
+          </div>
           <Panel>
             {s.workAnniversaries.length ? (
               <ul className="divide-y divide-line">
