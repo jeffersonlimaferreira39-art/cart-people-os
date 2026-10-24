@@ -2,7 +2,7 @@
 
 Plataforma de RH + Departamento Pessoal da C'Art Ambientações: cadastro de colaboradores, férias e
 ausências, movimentações do DP com envio à folha, ponto importado, painel e análises com gráficos,
-relatórios em Excel/CSV/PDF, prévia da folha (VT, VA/VR, benefícios, descontos, dependentes,
+relatórios em Excel/CSV/PDF, documentos de colaboradores, RH e DP, prévia da folha (VT, VA/VR, benefícios, descontos, dependentes,
 INSS, IRRF, FGTS) e assistente de IA.
 Multiunidade, com controle de acesso no banco (RLS), auditoria e cuidados de LGPD.
 
@@ -73,7 +73,7 @@ npm run dev
 
 ```bash
 npm run verify    # tipos, lint e testes de domínio
-npm run test:db   # migrações + 43 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
+npm run test:db   # migrações + 48 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
 npm run build
 ```
 

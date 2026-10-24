@@ -51,6 +51,9 @@ Sem unidade = vale para todas. A tabela abaixo é a regra de negócio; a RLS é 
 | Ver ponto | ✓ | ✓ | ✓ | equipe | ✓ | o próprio |
 | Assistente de IA | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Auditoria | org | | | | | |
+| Documentos do RH (enviar/excluir) | ✓ | ✓ | | | | |
+| Documentos do DP (enviar/excluir) | ✓ | | ✓ | | | |
+| Documentos da empresa marcados "todos" (ler) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Configurações e acessos | ✓ | | | | | |
 
 "Equipe" = liderados diretos e indiretos (cadeia `manager_id`, até 10 níveis).
@@ -74,10 +77,13 @@ a tabela de dados sensíveis.
    com INSS, IRRF, FGTS e líquido; 13º (1ª e 2ª parcelas) e recibo de férias (1/3, abono, médias);
    aba consolidada de benefícios e descontos; tabelas com vigência; exportação para a contabilidade.
 6. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
-7. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
-8. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
-9. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
-10. **Meus dados** — portal do colaborador, definição de senha e "Minha folha" (prévia do próprio
+7. **Documentos** — abas Colaboradores (todos os documentos das pessoas, com envio e filtro de
+   vencimento), RH e DP (documentos da empresa por área, com unidade, competência, vencimento e
+   visibilidade "só equipe" ou "todos"); quem não é da equipe vê os documentos compartilhados.
+8. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
+9. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
+10. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
+11. **Meus dados** — portal do colaborador, definição de senha e "Minha folha" (prévia do próprio
     pagamento, benefícios, rubricas, lançamentos e dependentes; somente leitura, últimos 6 meses).
 
 ## 5. Modelo de dados
@@ -96,6 +102,7 @@ Migrações em `supabase/migrations/` são a fonte da verdade. Resumo:
 - `employee_documents` — metadados; arquivo em `employee-documents/{org}/{employee}/{uuid}-{nome}`.
 - `employee_payroll_profile`, `employee_payroll_items`, `payroll_entries` — remuneração, rubricas
   fixas e lançamentos do mês (sensível); `payroll_tax_tables` — tabelas de cálculo com vigência.
+- `org_documents` — documentos do RH/DP (bucket privado `org-documents/{org}/{area}/...`).
 - `report_exports` — registro imutável de exportações.
 - `audit_log` — somente inserção via trigger; `ai_query_log` — perguntas ao assistente.
 
@@ -177,7 +184,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 43 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 48 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.

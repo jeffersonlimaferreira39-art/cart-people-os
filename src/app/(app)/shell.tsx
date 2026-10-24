@@ -34,6 +34,7 @@ async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
         ? [{ href: "/colaboradores", label: "Colaboradores", icon: "colaboradores" as const }]
         : []),
       { href: "/ausencias", label: "Férias e ausências", icon: "ausencias", badge: pendingLeaves },
+      { href: "/documentos", label: "Documentos", icon: "documentos" },
     ],
   };
   const insights: NavGroup = {

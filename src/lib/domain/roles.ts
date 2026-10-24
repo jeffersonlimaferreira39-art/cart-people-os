@@ -27,6 +27,8 @@ export const CAPABILITIES = {
   viewTime: ["admin", "rh", "dp", "diretoria", "gestor"],
   viewAudit: ["admin"],
   manageSettings: ["admin"],
+  manageRhDocs: ["admin", "rh"],
+  manageDpDocs: ["admin", "dp"],
   useAssistant: ["admin", "rh", "dp", "diretoria", "gestor"],
 } as const satisfies Record<string, readonly Role[]>;
 

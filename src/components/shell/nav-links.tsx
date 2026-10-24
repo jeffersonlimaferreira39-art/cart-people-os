@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Banknote, CalendarRange, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, Sparkles, UserRound, Users,
+  BarChart3, Banknote, CalendarRange, FolderOpen, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, Sparkles, UserRound, Users,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
@@ -14,6 +14,7 @@ const ICONS = {
   colaboradores: Users,
   ausencias: CalendarRange,
   dp: ClipboardList,
+  documentos: FolderOpen,
   folha: Banknote,
   ponto: Clock3,
   assistente: Sparkles,

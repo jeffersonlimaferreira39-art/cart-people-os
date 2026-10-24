@@ -65,6 +65,31 @@ export const DP_STATUS_LABELS = {
   cancelled: "Cancelada",
 } as const;
 
+/** Categorias dos documentos do RH e do DP (não vinculados a um colaborador). */
+export const ORG_DOCUMENT_CATEGORIES = {
+  rh: {
+    politica: "Política interna",
+    regulamento: "Regulamento interno",
+    cct: "Convenção/acordo coletivo",
+    saude_seguranca: "Saúde e segurança (PGR, PCMSO)",
+    treinamento: "Treinamento",
+    comunicado: "Comunicado",
+    modelo: "Modelo de documento",
+    outro: "Outro",
+  },
+  dp: {
+    guia: "Guia de recolhimento (INSS, FGTS, DARF)",
+    folha: "Folha e holerites",
+    esocial: "eSocial (recibos)",
+    beneficio: "Fatura de benefício (VT, VA, plano)",
+    rescisao: "Rescisão e homologação",
+    contabilidade: "Contabilidade",
+    ponto: "Ponto (espelhos)",
+    outro: "Outro",
+  },
+} as const;
+export type OrgDocumentArea = keyof typeof ORG_DOCUMENT_CATEGORIES;
+
 export const DOCUMENT_CATEGORY_LABELS = {
   contrato: "Contrato",
   documento_pessoal: "Documento pessoal",

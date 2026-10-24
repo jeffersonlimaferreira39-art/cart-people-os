@@ -482,3 +482,62 @@ describe("prévia de folha (dados de remuneração)", () => {
     expect(r.rows.every((x) => x.old_data === null && x.new_data === null)).toBe(true);
   });
 });
+
+describe("documentos do RH e do DP", () => {
+  const ins = (q: Q, area: string, unit: string | null, visibility = "restrito", org = ORG_A) =>
+    q(
+      `insert into org_documents (organization_id, unit_id, area, category, title, visibility, file_name, storage_path)
+       values ($1::uuid, $2::uuid, $3, 'politica', 'Documento', $4, 'a.pdf', $5 || '/' || $3 || '/' || gen_random_uuid() || '-a.pdf') returning id`,
+      [org, unit, area, visibility, org],
+    );
+  const count = (user: string) => as(user, (q) => q("select count(*)::int n from org_documents")).then((r) => r.rows[0].n as number);
+
+  beforeAll(async () => {
+    await asCommit(users.adminA, async (q) => {
+      await ins(q, "rh", null, "todos"); // regulamento para todos
+      await ins(q, "dp", null); // guia restrita
+    });
+    await asCommit(users.adminB, (q) => ins(q, "rh", null, "todos", ORG_B));
+  });
+
+  it("RH e DP de unidade enviam na própria área e unidade; não na área do outro", async () => {
+    await expect(as(users.rhU1, (q) => ins(q, "rh", U1))).resolves.toBeTruthy();
+    await expect(as(users.rhU1, (q) => ins(q, "dp", U1))).rejects.toThrow(/row-level security/);
+    await expect(as(users.dpU1, (q) => ins(q, "dp", U1))).resolves.toBeTruthy();
+    await expect(as(users.dpU1, (q) => ins(q, "dp", U2))).rejects.toThrow(/row-level security/);
+    // Sem unidade = documento da organização inteira: exige papel org-wide.
+    await expect(as(users.rhU1, (q) => ins(q, "rh", null))).rejects.toThrow(/row-level security/);
+  });
+
+  it("colaborador, gestor e diretoria não enviam", async () => {
+    for (const u of [users.colab1, users.gestor, users.diretoria]) {
+      await expect(as(u, (q) => ins(q, "rh", U1, "todos"))).rejects.toThrow(/row-level security/);
+    }
+  });
+
+  it("equipe lê tudo da organização; demais só o que é visível a todos", async () => {
+    expect(await count(users.rhU1)).toBe(2);
+    expect(await count(users.dpU1)).toBe(2);
+    expect(await count(users.colab1)).toBe(1);
+    expect(await count(users.gestor)).toBe(1);
+    expect(await count(users.diretoria)).toBe(1);
+    expect(await count(users.adminB)).toBe(1); // só o da própria organização
+  });
+
+  it("arquivo fica na pasta da organização e da área; caminho não muda", async () => {
+    await expect(
+      as(users.adminA, (q) =>
+        q(`insert into org_documents (organization_id, area, category, title, file_name, storage_path)
+           values ($1, 'rh', 'politica', 'X', 'x.pdf', $2)`, [ORG_A, `${ORG_B}/rh/x.pdf`]),
+      ),
+    ).rejects.toThrow(/check constraint/);
+    await expect(
+      as(users.adminA, (q) => q("update org_documents set storage_path = storage_path || 'x'")),
+    ).rejects.toThrow(/não mudam/);
+  });
+
+  it("colaborador não apaga documento visível a todos", async () => {
+    const r = await as(users.colab1, (q) => q("delete from org_documents returning 1"));
+    expect(r.rowCount).toBe(0);
+  });
+});
