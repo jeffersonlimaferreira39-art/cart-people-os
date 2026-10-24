@@ -421,6 +421,7 @@ export function calculatePayroll(input: PayrollInput): PayrollResult {
   add("PLANO_ODONTO", "Plano odontológico", "desconto", "mensal", p.dental_plan_employee);
   add("SEGURO_VIDA", "Seguro de vida", "desconto", "mensal", p.life_insurance_employee);
   add("CONTRIB_SINDICAL", "Contribuição sindical/assistencial", "desconto", "autorizada", p.union_fee);
+  add("PLANO_SAUDE_EMPRESA", "Plano de saúde (empresa)", "informativo", "mensal", p.health_plan_company);
   companyBenefits += p.health_plan_company;
   add("ADIANTAMENTO", "Adiantamento salarial", "desconto", "valor", sumAmt("ADIANTAMENTO"));
   add("DESCONTO_DIVERSO", "Outros descontos", "desconto", "valor", sumAmt("DESCONTO_DIVERSO"));

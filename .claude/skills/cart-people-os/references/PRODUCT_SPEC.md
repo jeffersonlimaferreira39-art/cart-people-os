@@ -72,7 +72,7 @@ a tabela de dados sensíveis.
    rubricas fixas e dependentes (filhos até 14 anos, dependentes de IR); por competência:
    lançamentos variáveis (horas extras, faltas, comissões, adiantamento) e demonstrativo estimado
    com INSS, IRRF, FGTS e líquido; 13º (1ª e 2ª parcelas) e recibo de férias (1/3, abono, médias);
-   tabelas com vigência; exportação para a contabilidade.
+   aba consolidada de benefícios e descontos; tabelas com vigência; exportação para a contabilidade.
 6. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
 7. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
 8. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.

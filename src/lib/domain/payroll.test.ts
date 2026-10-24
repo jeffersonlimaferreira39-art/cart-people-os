@@ -157,3 +157,28 @@ describe("prévia de folha — cálculo do colaborador", () => {
 function round(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+describe("benefícios e descontos consolidados", async () => {
+  const { benefitsBreakdown } = await import("./payroll-benefits");
+  it("separa concedido, desconto e custo da empresa a partir do demonstrativo", () => {
+    const r = calculatePayroll(base({
+      profile: {
+        ...DEFAULT_PROFILE, vt_enabled: true, vt_daily_amount: 10, vt_days: 22, va_monthly: 600, food_discount_pct: 10,
+        health_plan_employee: 150, health_plan_company: 300, dental_plan_employee: 25, union_fee: 30,
+      },
+      items: [{ kind: "desconto", code: "EMPRESTIMO_CONSIGNADO", description: "Consignado", amount: 250, percent: null,
+        incidence_inss: false, incidence_irrf: false, incidence_fgts: false, start_period: "2026-01", end_period: null }],
+      entries: [{ code: "ADIANTAMENTO", quantity: null, amount: 400 }, { code: "FALTA_DIAS", quantity: 1, amount: null }],
+    }));
+    const b = benefitsBreakdown(r);
+    expect(b).toMatchObject({
+      vtGranted: 220, vtDiscount: 180, vtCompany: 40,
+      foodGranted: 600, foodDiscount: 60, foodCompany: 540,
+      healthEmployee: 150, healthCompany: 300, dental: 25, unionFee: 30, fixedDiscounts: 250, advance: 400,
+      companyTotal: 880,
+      employeeTotal: 180 + 60 + 150 + 25 + 30 + 250 + 400,
+    });
+    // Bate com o total de benefícios da empresa do demonstrativo.
+    expect(b.companyTotal).toBe(r.totals.beneficiosEmpresa);
+  });
+});

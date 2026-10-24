@@ -6,6 +6,10 @@ import { getViewer, unitLabel, viewerCan } from "@/lib/auth/viewer";
 import { getPayrollPreview } from "@/lib/data/payroll";
 import { todayIn } from "@/lib/domain/dates";
 import { PAYROLL_KINDS, isPayrollKind } from "@/lib/domain/payroll-annual";
+import { BenefitsView } from "@/components/payroll/benefits-table";
+
+// Abas da prévia: os tipos de folha + a visão consolidada de benefícios (sobre a folha mensal).
+const TABS = [...PAYROLL_KINDS, { id: "beneficios", label: "Benefícios e descontos" }] as const;
 import { EMPLOYMENT_TYPE_LABELS, formatMoney, formatPeriod } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Panel } from "@/components/ui/panel";
@@ -38,8 +42,9 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
   const sp = await searchParams;
   const wanted = typeof sp.competencia === "string" ? sp.competencia : "";
   const period = PERIOD_RE.test(wanted) ? wanted : todayIn().slice(0, 7);
-  const kind = typeof sp.tipo === "string" && isPayrollKind(sp.tipo) ? sp.tipo : "mensal";
-  const kindLabel = PAYROLL_KINDS.find((k) => k.id === kind)!.label;
+  const tab = typeof sp.tipo === "string" && (isPayrollKind(sp.tipo) || sp.tipo === "beneficios") ? sp.tipo : "mensal";
+  const kind = tab === "beneficios" ? "mensal" : tab;
+  const kindLabel = TABS.find((k) => k.id === tab)!.label;
   const preview = await getPayrollPreview(viewer, period, undefined, kind);
   const calc = preview.rows.filter((r) => r.result.status === "calculada");
   const out = preview.rows.filter((r) => r.result.status !== "calculada");
@@ -56,18 +61,18 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
         actions={
           <>
             <form className="flex items-end gap-2" role="search">
-              <input type="hidden" name="tipo" value={kind} />
+              <input type="hidden" name="tipo" value={tab} />
               <label>
                 <span className="sr-only">Competência</span>
                 <Input type="month" name="competencia" defaultValue={period} className="w-40" />
               </label>
               <Button type="submit" variant="secondary">Ver</Button>
             </form>
-            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${kind}&formato=xlsx`} className={buttonClasses("primary")} download>
+            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${tab}&formato=xlsx`} className={buttonClasses("primary")} download>
               <FileSpreadsheet className="size-4" strokeWidth={1.75} />
               Excel
             </a>
-            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${kind}&formato=csv`} className={buttonClasses("secondary")} download>
+            <a href={`/dp/folha/arquivo?competencia=${period}&tipo=${tab}&formato=csv`} className={buttonClasses("secondary")} download>
               <Sheet className="size-4" strokeWidth={1.75} />
               CSV
             </a>
@@ -80,14 +85,14 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
       />
 
       <nav aria-label="Tipo de folha" className="mb-5 flex flex-wrap gap-1 rounded-[var(--radius-control)] border border-line-strong bg-surface/60 p-1 sm:w-fit">
-        {PAYROLL_KINDS.map((k) => (
+        {TABS.map((k) => (
           <Link
             key={k.id}
             href={`/dp/folha?competencia=${period}&tipo=${k.id}`}
-            aria-current={k.id === kind ? "page" : undefined}
+            aria-current={k.id === tab ? "page" : undefined}
             className={cn(
               "rounded-[6px] px-3 py-1.5 text-[13px] transition-colors",
-              k.id === kind ? "bg-accent font-medium text-accent-ink" : "text-ink-2 hover:text-ink",
+              k.id === tab ? "bg-accent font-medium text-accent-ink" : "text-ink-2 hover:text-ink",
             )}
           >
             {k.label}
@@ -103,6 +108,10 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
         </Notice>
       </div>
 
+      {tab === "beneficios" ? (
+        <BenefitsView rows={preview.rows} period={period} />
+      ) : (
+      <>
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Na prévia" value={calc.length} note={out.length ? `${out.length} fora da folha` : "todos calculados"} tone="accent" />
         <Stat label="Proventos" value={formatMoney(sum("proventos"))} note={`descontos ${formatMoney(sum("descontos"))}`} />
@@ -169,6 +178,8 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
           )
         )}
       </Panel>
+      </>
+      )}
     </>
   );
 }

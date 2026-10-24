@@ -93,7 +93,7 @@ export function Payslip({
           ["Base IRRF", t.baseIrrf],
           ["Base FGTS", t.baseFgts],
           ["FGTS (empresa)", t.fgts],
-          ...info.filter((l) => l.code !== "FGTS").map((l) => [l.label, l.amount] as [string, number]),
+          ...info.filter((l) => l.code !== "FGTS" && (audience === "dp" || !l.code.endsWith("_EMPRESA"))).map((l) => [l.label, l.amount] as [string, number]),
           // Custo da empresa é informação interna do DP, não do titular.
           ...(audience === "dp"
             ? ([

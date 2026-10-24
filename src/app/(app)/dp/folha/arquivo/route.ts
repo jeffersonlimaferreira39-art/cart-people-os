@@ -6,6 +6,8 @@ import { PAYROLL_KINDS, isPayrollKind } from "@/lib/domain/payroll-annual";
 import { EMPLOYMENT_TYPE_LABELS, formatPeriod } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { ReportTable } from "@/lib/reports/catalog";
+import type { PreviewRow } from "@/lib/data/payroll";
+import { BENEFIT_COLUMNS, benefitsBreakdown } from "@/lib/domain/payroll-benefits";
 import { reportFileName, tableToCsv } from "@/lib/reports/files";
 import { tableToXlsx } from "@/lib/reports/xlsx";
 
@@ -29,8 +31,9 @@ export async function GET(req: NextRequest) {
   const format = req.nextUrl.searchParams.get("formato") === "csv" ? "csv" : "xlsx";
 
   const tipo = req.nextUrl.searchParams.get("tipo") ?? "mensal";
+  const benefits = tipo === "beneficios";
   const kind = isPayrollKind(tipo) ? tipo : "mensal";
-  const kindLabel = PAYROLL_KINDS.find((k) => k.id === kind)!.label;
+  const kindLabel = benefits ? "Benefícios e descontos" : PAYROLL_KINDS.find((k) => k.id === kind)!.label;
   const preview = await getPayrollPreview(viewer, period, undefined, kind);
   const calc = preview.rows.filter((r) => r.result.status === "calculada");
   // Colunas de rubrica na ordem em que aparecem (proventos, depois descontos).
@@ -44,7 +47,7 @@ export async function GET(req: NextRequest) {
     }
   }
   const rubricList = [...rubrics.entries()];
-  const table: ReportTable = {
+  const table: ReportTable = benefits ? benefitsTable(calc, period, unitLabel(viewer)) : {
     title: `Prévia da folha ${formatPeriod(period)} · ${kindLabel}`,
     scope: `${unitLabel(viewer)} · estimativa para conferência, não é a folha oficial`,
     columns: [
@@ -93,14 +96,14 @@ export async function GET(req: NextRequest) {
     user_id: viewer.userId,
     report: "previa_folha",
     format,
-    filters: { period, kind },
+    filters: { period, kind: benefits ? "beneficios" : kind },
     row_count: table.rows.length,
   });
   if (error) return new NextResponse("Não foi possível registrar a exportação. Tente de novo.", { status: 500 });
 
   const today = todayIn();
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
-  const name = reportFileName(`previa_folha_${kind}_${period}`, format, today);
+  const name = reportFileName(`previa_folha_${benefits ? "beneficios" : kind}_${period}`, format, today);
   if (format === "csv") {
     return new NextResponse(tableToCsv(table), {
       headers: { ...headers, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"` },
@@ -115,4 +118,27 @@ export async function GET(req: NextRequest) {
       "Content-Disposition": `attachment; filename="${name}"`,
     },
   });
+}
+
+/** Planilha de benefícios e descontos: uma linha por colaborador, valores do mês. */
+function benefitsTable(rows: PreviewRow[], period: string, unit: string): ReportTable {
+  return {
+    title: `Benefícios e descontos ${formatPeriod(period)}`,
+    scope: `${unit} · estimativa da prévia mensal, não é a folha oficial`,
+    columns: [
+      { header: "Matrícula", kind: "text", width: 12 },
+      { header: "Nome", kind: "text", width: 32 },
+      { header: "Unidade", kind: "text", width: 10 },
+      { header: "Vínculo", kind: "text", width: 12 },
+      ...BENEFIT_COLUMNS.map((c) => ({ header: c.label, kind: "number" as const, width: 18 })),
+    ],
+    rows: rows.map(({ employee: e, result }) => {
+      const b = benefitsBreakdown(result);
+      return [
+        e.registration_number, e.full_name, e.unit_code,
+        EMPLOYMENT_TYPE_LABELS[e.employment_type as keyof typeof EMPLOYMENT_TYPE_LABELS] ?? e.employment_type,
+        ...BENEFIT_COLUMNS.map((c) => b[c.key] || null),
+      ];
+    }),
+  };
 }

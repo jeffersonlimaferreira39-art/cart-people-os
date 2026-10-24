@@ -42,6 +42,11 @@ cálculo. A especificação mantém a folha oficial com a contabilidade até hom
    - Médias: horas médias × valor-hora atual e comissões em R$ (12 meses antes das férias; meses
      do ano antes do 13º). O DP pode informar médias e a 1ª parcela já paga, substituindo o cálculo.
 
+8. **Aba Benefícios e descontos** (`src/lib/domain/payroll-benefits.ts`): visão consolidada da
+   folha mensal por colaborador — VT concedido/desconto/custo, VA/VR concedido/coparticipação/custo,
+   plano de saúde (colaborador e empresa), odonto, seguro, sindical, pensão, descontos fixos e
+   adiantamento, com totais e planilha. Deriva das mesmas linhas do demonstrativo.
+
 ## Consequências
 Antes do uso real, a contabilidade compara a prévia com a folha oficial de pelo menos um mês
 (checklist de homologação). Encargos patronais além do FGTS e rescisão ficam fora; o INSS do mês com férias é consolidado pela contabilidade.
