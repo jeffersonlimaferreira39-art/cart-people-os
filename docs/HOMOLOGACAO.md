@@ -9,7 +9,8 @@ A produção com dados reais só começa com todos os itens marcados e as assina
 - [ ] `SUPABASE_SECRET_KEY` apenas nas variáveis de servidor da Vercel
 - [ ] Teste manual com um usuário de cada papel (admin, RH, DP, gestor, diretoria, colaborador)
 - [ ] Tentativa de acesso cruzado entre duas unidades bloqueada
-- [ ] Backups automáticos (PITR) ativos no Supabase
+- [ ] Backup diário configurado (docs/BACKUP.md), primeiro backup baixado e restauração testada
+      num projeto de teste; senha do backup guardada no cofre da empresa
 - [ ] Domínio próprio com HTTPS
 
 ## Processos legais e de DP

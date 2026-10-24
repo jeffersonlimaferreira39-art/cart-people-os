@@ -1,0 +1,62 @@
+name: Backup
+
+# Backup diário criptografado do banco e dos arquivos (ver docs/BACKUP.md).
+on:
+  schedule:
+    - cron: "17 5 * * *" # 02:17 em Fortaleza/São Paulo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Conferir segredos
+        run: |
+          missing=""
+          for v in SUPABASE_DB_URL SUPABASE_URL SUPABASE_SECRET_KEY BACKUP_PASSPHRASE; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Cadastre os segredos do repositório:$missing (docs/BACKUP.md)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev --ignore-scripts
+      - name: Instalar cliente PostgreSQL 17 (mesma versão do Supabase)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Gerar backup criptografado
+        run: OUT_DIR=backup-out bash scripts/backup/backup.sh
+      - name: Testar se o arquivo abre com a senha
+        run: |
+          f=$(ls backup-out/*.enc)
+          bash scripts/backup/decrypt.sh "$f" /tmp/verify >/dev/null
+          test -s /tmp/verify/*/data.sql && echo "✓ backup legível"
+          rm -rf /tmp/verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: backup-out/
+          retention-days: 30
+          if-no-files-found: error

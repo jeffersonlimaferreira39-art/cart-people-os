@@ -79,6 +79,11 @@ npm run build
 
 O CI (`.github/workflows/ci.yml`) roda tudo isso a cada push e pull request.
 
+## Backup
+
+Backup diário criptografado do banco e dos arquivos pelo GitHub Actions — configuração e
+restauração em [`docs/BACKUP.md`](docs/BACKUP.md).
+
 ## Segurança em resumo
 
 - RLS em todas as tabelas; gestor só vê a própria equipe; unidade A não vê unidade B.
