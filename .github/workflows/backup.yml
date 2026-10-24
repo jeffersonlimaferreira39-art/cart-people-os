@@ -72,7 +72,11 @@ jobs:
             echo "::error::Cadastre os segredos R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID e R2_SECRET_ACCESS_KEY (docs/BACKUP.md)"
             exit 1
           fi
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          # Aceita o Account ID puro ou o endpoint completo (https://<id>.r2.cloudflarestorage.com).
+          account=$(printf '%s' "$R2_ACCOUNT_ID" | grep -oiE '[0-9a-f]{32}' | head -1)
+          [ -n "$account" ] || { echo "::error::R2_ACCOUNT_ID inválido: use o código de 32 caracteres do Account ID"; exit 1; }
+          R2_BUCKET=$(printf '%s' "$R2_BUCKET" | tr -d '[:space:]/')
+          endpoint="https://${account}.r2.cloudflarestorage.com"
           day=$(date -u +%Y/%m)
           for f in backup-out/*; do
             aws s3 cp "$f" "s3://${R2_BUCKET}/backups/${day}/$(basename "$f")" --endpoint-url "$endpoint" --only-show-errors
