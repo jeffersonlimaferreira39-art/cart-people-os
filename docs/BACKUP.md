@@ -34,7 +34,8 @@ GitHub → repositório → Settings → Secrets and variables → Actions → *
 ### Cloudflare R2 (uma vez)
 1. Cloudflare → **R2 Object Storage** → ative o R2 (o plano gratuito inclui 10 GB; a Cloudflare pede um
    meio de pagamento para ativar).
-2. **Create bucket**: `cart-people-os-backups`, localização automática ou América do Sul. Deixe **privado**
+2. **Create bucket**: `cart-people-os-backups`, Location **Automatic** (não há região na América do Sul),
+   Storage Class **Standard** (a cota grátis vale só para ela). Deixe **privado**
    (sem domínio público nem acesso r2.dev).
 3. **Manage API tokens → Create API token**: permissão *Object Read & Write*, aplicada **só a este bucket**.
    Copie Access Key ID e Secret Access Key (o segredo só aparece uma vez).

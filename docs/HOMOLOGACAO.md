@@ -28,6 +28,7 @@ A produção com dados reais só começa com todos os itens marcados e as assina
 - [ ] DP validou as regras de férias aplicadas (fracionamento, abono, início, aviso)
 - [ ] Definido o sistema de ponto oficial e conferida a importação de um mês real
 - [ ] Encarregado (DPO) aprovou a tabela de bases legais e retenção (spec, seção 7)
+- [ ] DPO ciente da transferência internacional do backup criptografado (Cloudflare R2, EUA; chave só com a empresa)
 - [ ] Aviso de privacidade aos colaboradores atualizado mencionando o People OS e o assistente de IA
 
 ## Assinaturas
