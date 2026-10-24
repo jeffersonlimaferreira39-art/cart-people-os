@@ -33,7 +33,7 @@ Depois: Actions → **Backup** → Run workflow, para gerar o primeiro e conferi
 
 1. Actions → Backup → execução desejada → Artifacts → baixe `backup-<id>.zip` e descompacte.
 2. `BACKUP_PASSPHRASE='...' bash scripts/backup/decrypt.sh cart-people-os-<data>.tar.gz.enc ./restauracao`
-3. Confira `sha256sum` com o arquivo `.sha256` que veio junto.
+3. Confira a integridade na pasta do download: `sha256sum -c cart-people-os-<data>.sha256` (deve dizer OK).
 
 ## Restaurar (projeto Supabase novo ou o mesmo, vazio)
 
@@ -45,6 +45,7 @@ Depois: Actions → **Backup** → Run workflow, para gerar o primeiro e conferi
 4. Compare as contagens com `row-counts.json`, troque as chaves na Vercel (se o projeto mudou) e
    ajuste URL do site e Redirect URLs no Auth (README, passo 3).
 
+Primeiro backup em produção: 24/10/2026 (GitHub Actions, pg_dump 17, aberto e conferido).
 Teste de restauração validado em outubro de 2026: banco novo com migrações + `data.sql`
 reproduziu exatamente as contagens de colaboradores, acessos, auditoria, logins, documentos e folha.
 

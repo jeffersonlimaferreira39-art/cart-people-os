@@ -48,5 +48,6 @@ echo "→ Compactando e criptografando"
 tar -C "$WORK" -czf - "cart-people-os-$STAMP" \
   | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_PASSPHRASE \
       -out "$OUT_DIR/cart-people-os-$STAMP.tar.gz.enc"
-sha256sum "$OUT_DIR/cart-people-os-$STAMP.tar.gz.enc" | tee "$OUT_DIR/cart-people-os-$STAMP.sha256"
+# Só o nome do arquivo: assim "sha256sum -c" funciona na pasta onde o backup for baixado.
+(cd "$OUT_DIR" && sha256sum "cart-people-os-$STAMP.tar.gz.enc" | tee "cart-people-os-$STAMP.sha256")
 echo "✓ Backup pronto: $OUT_DIR/cart-people-os-$STAMP.tar.gz.enc"
