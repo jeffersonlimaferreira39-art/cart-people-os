@@ -76,6 +76,7 @@ async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">[
               <Sheet className="size-4" strokeWidth={1.75} />
               CSV
             </a>
+            <ButtonLink href={`/dp/folha/digitacao?competencia=${period}`} variant="secondary">Digitar lançamentos</ButtonLink>
             <ButtonLink href="/dp/folha/tabelas" variant="ghost">
               <Settings2 className="size-4" strokeWidth={1.75} />
               Tabelas

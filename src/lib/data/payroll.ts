@@ -7,6 +7,7 @@ import {
   type HistoryEntry, type PayrollKind,
 } from "@/lib/domain/payroll-annual";
 import { formatDate } from "@/lib/format";
+import { isGridCode, type GridValues } from "@/lib/domain/payroll-grid";
 import {
   DEFAULT_PROFILE, calculatePayroll, countChildrenUnder14, round2,
    type PayrollProfile, type PayrollResult, type RecurringItem,
@@ -374,4 +375,60 @@ export async function listEntries(employeeId: string, period: string): Promise<E
     .eq("period", period)
     .order("created_at");
   return ((data ?? []) as EntryRow[]).map((r) => ({ ...r, quantity: r.quantity === null ? null : Number(r.quantity), amount: r.amount === null ? null : Number(r.amount) }));
+}
+
+export type GridData = {
+  employees: { id: string; full_name: string; registration_number: string; unit_code: string; employment_type: string }[];
+  saved: GridValues;
+  /** Horas do ponto importado (sugestão mostrada na célula vazia). */
+  ponto: GridValues;
+};
+
+/** Dados da digitação de folha: quem tem vínculo na competência, lançamentos manuais e horas do ponto. */
+export async function getGridData(viewer: Viewer, period: string): Promise<GridData> {
+  if (!viewerCan(viewer, "viewSensitive")) throw new Error("Sem acesso à folha.");
+  const supabase = await createClient();
+  const { start, end } = monthBounds(period);
+  let q = supabase
+    .from("employees")
+    .select("id, full_name, registration_number, employment_type, unit:units(code)")
+    .lte("hire_date", end)
+    .or(`termination_date.is.null,termination_date.gte.${start}`)
+    .neq("employment_type", "pj")
+    .order("full_name")
+    .limit(5000);
+  q = inUnit(q, viewer);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const employees = (data ?? []).map((e) => ({
+    id: e.id as string,
+    full_name: e.full_name as string,
+    registration_number: e.registration_number as string,
+    employment_type: e.employment_type as string,
+    unit_code: (e.unit as unknown as { code: string } | null)?.code ?? "",
+  }));
+  const ids = employees.map((e) => e.id);
+  const saved: GridValues = {};
+  const ponto: GridValues = {};
+  for (let i = 0; i < ids.length; i += 200) {
+    const part = ids.slice(i, i + 200);
+    const [entries, time] = await Promise.all([
+      supabase.from("payroll_entries").select("employee_id, code, quantity, amount").in("employee_id", part).eq("period", period).limit(100000),
+      viewerCan(viewer, "viewTime")
+        ? supabase.from("time_entries").select("employee_id, overtime_minutes, night_minutes").in("employee_id", part).gte("work_date", start).lte("work_date", end).limit(100000)
+        : Promise.resolve({ data: [] as { employee_id: string; overtime_minutes: number; night_minutes: number }[] }),
+    ]);
+    for (const en of entries.data ?? []) {
+      if (!isGridCode(en.code)) continue;
+      const v = Number(en.quantity ?? en.amount ?? 0);
+      const row = (saved[en.employee_id] ??= {});
+      row[en.code] = round2((row[en.code] ?? 0) + v);
+    }
+    for (const t of time.data ?? []) {
+      const row = (ponto[t.employee_id] ??= {});
+      row.HE50 = round2((row.HE50 ?? 0) + t.overtime_minutes / 60);
+      row.ADN = round2((row.ADN ?? 0) + t.night_minutes / 60);
+    }
+  }
+  return { employees, saved, ponto };
 }

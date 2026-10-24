@@ -8,6 +8,7 @@ import { fail, formToObject, fromDbError, fromZod, success, type ActionState } f
 import { ENTRY_CODES, ITEM_CODES } from "@/lib/domain/payroll";
 import { TABLE_SCHEMAS, type TableKind } from "@/lib/domain/payroll-tables";
 import { dependentSchema, entrySchema, itemSchema, periodSchema, profileSchema } from "@/lib/validation/payroll";
+import { GRID_CODES, gridUnit } from "@/lib/domain/payroll-grid";
 
 const uuid = z.uuid();
 
@@ -234,4 +235,64 @@ function buildTableData(kind: TableKind, raw: Record<string, string | undefined>
         },
       };
   }
+}
+
+const gridChangesSchema = z
+  .array(z.object({ employee_id: z.uuid(), code: z.enum(GRID_CODES), value: z.number().min(0).max(999_999).nullable() }))
+  .min(1, "Nada para salvar.")
+  .max(5000, "Salve em partes menores (até 5.000 células).");
+
+/**
+ * Salva as células alteradas da digitação de folha. Cada célula substitui os
+ * lançamentos manuais daquele código no mês (vazio/zero = remove).
+ */
+export async function saveGrid(period: string, changesJson: string): Promise<ActionState> {
+  const viewer = await getViewer();
+  const p = periodSchema.safeParse(period);
+  if (!p.success) return fail("Competência inválida.");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(changesJson);
+  } catch {
+    return fail("Dados da grade inválidos.");
+  }
+  const parsed = gridChangesSchema.safeParse(raw);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Dados da grade inválidos.");
+  const changes = parsed.data;
+
+  const supabase = await createClient();
+  const ids = [...new Set(changes.map((c) => c.employee_id))];
+  const { data: emps } = await supabase.from("employees").select("id, unit_id").in("id", ids);
+  const unitOf = new Map((emps ?? []).map((e) => [e.id as string, e.unit_id as string]));
+  const denied = ids.filter((id) => !unitOf.has(id) || !viewerCanInUnit(viewer, "viewSensitive", unitOf.get(id)!));
+  if (denied.length) return fail(`Sem permissão para ${denied.length} colaborador(es) desta grade. Nada foi salvo.`);
+
+  for (const id of ids) {
+    const mine = changes.filter((c) => c.employee_id === id);
+    const { error: delErr } = await supabase
+      .from("payroll_entries")
+      .delete()
+      .eq("employee_id", id)
+      .eq("period", p.data)
+      .in("code", mine.map((c) => c.code));
+    if (delErr) return fromDbError(delErr);
+    const rows = mine
+      .filter((c) => c.value !== null)
+      .map((c) => ({
+        employee_id: id,
+        organization_id: viewer.organization.id,
+        unit_id: unitOf.get(id)!,
+        period: p.data,
+        code: c.code,
+        quantity: gridUnit(c.code) === "valor" ? null : c.value,
+        amount: gridUnit(c.code) === "valor" ? c.value : null,
+        notes: "Digitação de folha",
+      }));
+    if (rows.length) {
+      const { error } = await supabase.from("payroll_entries").insert(rows);
+      if (error) return fromDbError(error);
+    }
+  }
+  refresh();
+  return success(`${changes.length} célula(s) salva(s).`);
 }
