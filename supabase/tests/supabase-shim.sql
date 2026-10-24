@@ -20,7 +20,22 @@ grant usage on schema public to anon, authenticated, service_role;
 
 create table if not exists auth.users (
   id    uuid primary key,
-  email text unique
+  email text unique,
+  created_at         timestamptz default now(),
+  invited_at         timestamptz,
+  email_confirmed_at timestamptz,
+  last_sign_in_at    timestamptz,
+  banned_until       timestamptz
+);
+
+create table if not exists auth.sessions (
+  id           uuid primary key,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now(),
+  refreshed_at timestamp,
+  user_agent   text,
+  ip           inet
 );
 
 create or replace function auth.uid() returns uuid

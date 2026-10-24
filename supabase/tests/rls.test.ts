@@ -668,3 +668,59 @@ describe("contratação", () => {
     expect(r.rowCount).toBe(0);
   });
 });
+
+describe("controle de acesso", () => {
+  it("revisão: carimbo do servidor e só o administrador geral altera papéis de outros", async () => {
+    const r = await as(users.adminA, (q) =>
+      q("update memberships set reviewed_at = '2000-01-01', reviewed_by = $2 where user_id = $1 returning reviewed_at, reviewed_by", [users.rhU1, users.colab1]),
+    );
+    expect(r.rows[0].reviewed_by).toBe(users.adminA);
+    expect(new Date(r.rows[0].reviewed_at).getFullYear()).toBeGreaterThan(2020);
+    for (const u of [users.unitAdminU1, users.rhU1, users.adminB]) {
+      const x = await as(u, (q) => q("update memberships set reviewed_at = now() where user_id = $1 returning 1", [users.dpU1]));
+      expect(x.rowCount).toBe(0);
+    }
+  });
+
+  it("suspensão só vale com papel inativo e reativar limpa a suspensão", async () => {
+    const ativo = await as(users.adminA, (q) => q("update memberships set suspended_at = now() where user_id = $1 returning suspended_at", [users.gestor]));
+    expect(ativo.rows[0].suspended_at).toBeNull();
+    const r = await as(users.adminA, async (q) => {
+      await q("update memberships set active = false, suspended_at = now() where user_id = $1", [users.gestor]);
+      return q("update memberships set active = true where user_id = $1 returning suspended_at", [users.gestor]);
+    });
+    expect(r.rows[0].suspended_at).toBeNull();
+  });
+
+  it("dados de autenticação e sessões: só o administrador geral da organização", async () => {
+    await db.query("insert into auth.sessions (id, user_id, user_agent, ip) values ($1, $2, 'Teste', '10.0.0.1')", [id(), users.colab1]);
+    const users_ = await as(users.adminA, (q) => q("select * from org_users($1)", [ORG_A]));
+    expect(users_.rows.map((u) => u.user_id)).toContain(users.colab1);
+    expect(users_.rows.map((u) => u.user_id)).not.toContain(users.adminB);
+    const s = await as(users.adminA, (q) => q("select * from org_user_sessions($1)", [ORG_A]));
+    expect(s.rows.some((x) => x.user_id === users.colab1 && x.ip === "10.0.0.1")).toBe(true);
+    for (const u of [users.rhU1, users.unitAdminU1, users.adminB]) {
+      await expect(as(u, (q) => q("select * from org_users($1)", [ORG_A]))).rejects.toThrow(/administrador geral/);
+      await expect(as(u, (q) => q("select end_user_sessions($1, $2)", [ORG_A, users.colab1]))).rejects.toThrow(/administrador geral/);
+    }
+    await expect(as(users.adminB, (q) => q("select end_user_sessions($1, $2)", [ORG_B, users.colab1]))).rejects.toThrow(/não pertence/);
+    await expect(as(users.adminA, (q) => q("select end_user_sessions($1, $2)", [ORG_A, users.adminA]))).rejects.toThrow(/própria sessão/);
+    const n = await as(users.adminA, (q) => q("select end_user_sessions($1, $2) n", [ORG_A, users.colab1]));
+    expect(n.rows[0].n).toBe(1);
+  });
+
+  it("histórico de acessos: login só pelo servidor; administrador lê, demais só os próprios", async () => {
+    await expect(as(users.adminA, (q) => q("select record_access_event('colab1@teste.dev', 'login', null, null)"))).rejects.toThrow(/permission denied/);
+    await db.query("select record_access_event('COLAB1@teste.dev', 'login', '10.0.0.1', 'Teste')");
+    await db.query("select record_access_event('ninguem@teste.dev', 'login_falhou', null, null)");
+    const evs = (u: string) => as(u, (q) => q("select user_id from access_events")).then((r) => r.rows.map((x) => x.user_id));
+    expect(await evs(users.adminA)).toContain(users.colab1);
+    expect(await evs(users.colab1)).toEqual([users.colab1]);
+    expect(await evs(users.colab2)).toEqual([]);
+    expect(await evs(users.adminB)).toEqual([]);
+    expect(await evs(users.rhU1)).toEqual([]);
+    await expect(as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'login', $1)", [users.colab1]))).rejects.toThrow(/row-level security/);
+    const ok = await as(users.adminA, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'bloqueio', $2) returning 1", [users.colab1, users.adminA]));
+    expect(ok.rowCount).toBe(1);
+  });
+});

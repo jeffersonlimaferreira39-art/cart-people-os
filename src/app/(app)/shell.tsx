@@ -77,6 +77,9 @@ const buildNav = cache(async (viewer: Viewer): Promise<NavGroup[]> => {
       ...(viewerCan(viewer, "viewAudit") && viewer.orgWide
         ? [{ href: "/auditoria", label: "Auditoria", icon: "auditoria" as const }]
         : []),
+      ...(viewerCan(viewer, "manageSettings") && viewer.scopes.some((s) => s.role === "admin" && s.unitId === null)
+        ? [{ href: "/acessos", label: "Acessos", icon: "acessos" as const }]
+        : []),
       ...(viewerCan(viewer, "manageSettings")
         ? [{ href: "/configuracoes", label: "Configurações", icon: "configuracoes" as const }]
         : []),

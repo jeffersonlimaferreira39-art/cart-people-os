@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { recordAccess } from "@/lib/auth/access-log";
 import { fail, success, type ActionState } from "@/lib/actions";
 
 const schema = z.object({
@@ -39,6 +40,7 @@ export async function signIn(_: ActionState, form: FormData): Promise<ActionStat
         emailRedirectTo: `${env.siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
+    if (!error) await recordAccess(email, "link_enviado");
     // Mesma resposta exista ou não a conta, para não revelar e-mails cadastrados.
     if (error && error.status !== 400 && error.status !== 422) {
       return fail("Não foi possível enviar o link agora. Tente novamente em alguns minutos.");
@@ -48,6 +50,8 @@ export async function signIn(_: ActionState, form: FormData): Promise<ActionStat
 
   if (!password) return fail("Informe a senha ou peça um link de acesso por e-mail.");
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error?.code === "user_banned") return fail("Seu acesso está bloqueado. Procure o administrador do People OS.");
+  await recordAccess(email, error ? "login_falhou" : "login");
   if (error) return fail("E-mail ou senha incorretos.");
   redirect(next);
 }

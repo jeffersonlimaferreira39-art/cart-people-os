@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { ALL_UNITS, UNIT_COOKIE, getViewer } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
+import { recordAccess } from "@/lib/auth/access-log";
 
 export async function selectUnit(unitId: string) {
   const viewer = await getViewer();
@@ -22,6 +23,8 @@ export async function selectUnit(unitId: string) {
 
 export async function signOut() {
   const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
   await supabase.auth.signOut();
+  await recordAccess(data?.claims.email as string | undefined, "logout");
   redirect("/login");
 }

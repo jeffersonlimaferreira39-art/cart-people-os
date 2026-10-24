@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Link from "next/link";
 import { getViewer, viewerCan } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,7 +38,11 @@ function ToggleButton({ table, id, active }: { table: "units" | "departments" | 
   );
 }
 
-async function emailsById(ids: string[]) {
+async function emailsById(orgId: string, ids: string[]) {
+  const supabase = await createClient();
+  const { data: viaDb } = await supabase.rpc("org_users", { p_org: orgId });
+  if (viaDb) return Object.fromEntries((viaDb as { user_id: string; email: string }[]).map((u) => [u.user_id, u.email]));
+  // Administrador de unidade: a função é exclusiva do administrador geral.
   try {
     const admin = createAdminClient();
     const map: Record<string, string> = {};
@@ -64,7 +69,7 @@ async function SettingsContent() {
     supabase.from("employees").select("id, full_name, user_id").is("user_id", null).neq("status", "terminated").order("full_name"),
   ]);
   const unitName = new Map((units.data ?? []).map((u) => [u.id, u.name]));
-  const emails = await emailsById([...new Set((memberships.data ?? []).map((m) => m.user_id))]);
+  const emails = await emailsById(viewer.organization.id, [...new Set((memberships.data ?? []).map((m) => m.user_id))]);
   const activeUnits = (units.data ?? []).filter((u) => u.active);
 
   return (
@@ -96,6 +101,9 @@ async function SettingsContent() {
         </Panel>
         <p className="mt-2 text-[13px] text-ink-3">
           Novos usuários recebem um convite por e-mail. Não existe cadastro aberto: só entra quem foi convidado.
+          {viewer.scopes.some((s) => s.role === "admin" && s.unitId === null) ? (
+            <> Bloqueio, revisão periódica e histórico de acessos ficam em <Link href="/acessos" className="text-accent hover:underline">Controle de acesso</Link>.</>
+          ) : null}
         </p>
       </section>
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Banknote, BadgePercent, BriefcaseBusiness, CalendarRange, FolderOpen, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, Sparkles, UserRound, Users,
+  BarChart3, Banknote, BadgePercent, BriefcaseBusiness, CalendarRange, FolderOpen, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, ShieldCheck, Sparkles, UserRound, Users,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
@@ -21,6 +21,7 @@ const ICONS = {
   ponto: Clock3,
   assistente: Sparkles,
   auditoria: FileClock,
+  acessos: ShieldCheck,
   configuracoes: Settings2,
   "meus-dados": UserRound,
 } as const;

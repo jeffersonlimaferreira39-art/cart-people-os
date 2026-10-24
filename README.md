@@ -73,7 +73,7 @@ npm run dev
 
 ```bash
 npm run verify    # tipos, lint e testes de domínio
-npm run test:db   # migrações + 60 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
+npm run test:db   # migrações + 64 testes de isolamento RLS (precisa de Postgres; PGHOST/PGPORT/PGUSER)
 npm run build
 ```
 

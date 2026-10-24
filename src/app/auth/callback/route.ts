@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { recordAccess } from "@/lib/auth/access-log";
 
 /** Conclui login por link mágico ou convite (PKCE ou token_hash). */
 export async function GET(request: NextRequest) {
@@ -14,10 +15,15 @@ export async function GET(request: NextRequest) {
   const type = url.searchParams.get("type") as EmailOtpType | null;
 
   let ok = false;
+  let email: string | undefined;
   if (code) {
-    ok = !(await supabase.auth.exchangeCodeForSession(code)).error;
+    const r = await supabase.auth.exchangeCodeForSession(code);
+    ok = !r.error;
+    email = r.data.user?.email;
   } else if (tokenHash && type) {
-    ok = !(await supabase.auth.verifyOtp({ token_hash: tokenHash, type })).error;
+    const r = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    ok = !r.error;
+    email = r.data.user?.email;
   } else {
     // Sem code nem token_hash: a sessão está no fragmento (#access_token), lido no navegador.
     const confirm = url.clone();
@@ -30,6 +36,7 @@ export async function GET(request: NextRequest) {
   const target = url.clone();
   target.search = "";
   if (ok) {
+    await recordAccess(email, "login");
     // Convite: primeiro acesso leva à definição de senha.
     target.pathname = type === "invite" || type === "recovery" ? "/meus-dados/senha" : next;
   } else {

@@ -91,6 +91,11 @@ a tabela de dados sensíveis.
    visibilidade "só equipe" ou "todos"); quem não é da equipe vê os documentos compartilhados.
 8. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
 9. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
+   **Controle de acesso** (administrador geral) — usuários com papéis, situação, último acesso e
+   sessões; alterar papel/escopo, revogar, bloquear/desbloquear (suspende papéis, encerra sessões,
+   bloqueia o login no Auth), reenviar convite ou link de senha; revisão periódica a cada 90 dias
+   (carimbo de quem revisou no banco); histórico de acessos (entradas, senhas incorretas, saídas e
+   ações administrativas, com IP e dispositivo).
 10. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
 11. **Meus dados** — portal do colaborador, definição de senha e "Minha folha" (prévia do próprio
     pagamento, benefícios, rubricas, lançamentos e dependentes; somente leitura, últimos 6 meses).
@@ -116,6 +121,10 @@ Migrações em `supabase/migrations/` são a fonte da verdade. Resumo:
   Admin/RH/DP da unidade e o próprio vendedor; planos legíveis por membros).
 - `job_openings`, `candidates`, `candidate_events`, `admission_checklist` — contratação; currículos
   em `recruitment/{org}/{candidato}/{uuid}-{nome}`; candidato herda unidade da vaga.
+- `memberships.reviewed_at/reviewed_by/suspended_at` — revisão periódica e bloqueio reversível.
+- `access_events` — histórico de acessos; login gravado só pelo servidor (`record_access_event`,
+  chave secreta); leitura pelo administrador geral e pelo próprio usuário. Funções `org_users`,
+  `org_user_sessions` e `end_user_sessions` expõem dados do Auth só ao administrador geral.
 - `report_exports` — registro imutável de exportações.
 - `audit_log` — somente inserção via trigger; `ai_query_log` — perguntas ao assistente.
 
@@ -197,7 +206,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 60 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 64 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.
