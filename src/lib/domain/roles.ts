@@ -28,6 +28,8 @@ export const CAPABILITIES = {
   viewAudit: ["admin"],
   manageSettings: ["admin"],
   manageRhDocs: ["admin", "rh"],
+  viewRecruitment: ["admin", "rh", "dp"],
+  manageRecruitment: ["admin", "rh"],
   manageDpDocs: ["admin", "dp"],
   useAssistant: ["admin", "rh", "dp", "diretoria", "gestor"],
 } as const satisfies Record<string, readonly Role[]>;

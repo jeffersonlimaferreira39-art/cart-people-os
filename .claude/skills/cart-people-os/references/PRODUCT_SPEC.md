@@ -80,6 +80,11 @@ a tabela de dados sensíveis.
    **Comissões** — planos (% fixo, faixas por meta, % por categoria; base venda ou recebido),
    vendedores com meta e % próprio, vendas e recebimentos por digitação ou planilha CSV, apuração
    e lançamento como COMISSAO na folha; o vendedor vê a própria comissão em Minha folha.
+   **Contratação** — vagas por unidade (aberta/pausada/encerrada), candidatos com consentimento
+   LGPD e currículo em bucket privado, quadro por etapa (triagem → entrevista → teste → proposta →
+   aprovado), histórico automático, contratação que gera o cadastro "em admissão", o checklist de
+   admissão e a movimentação de admissão em rascunho; conclusão ativa o colaborador. RH/Admin
+   mantêm; DP lê candidatos e cuida do checklist; diretoria vê as vagas.
 6. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
 7. **Documentos** — abas Colaboradores (todos os documentos das pessoas, com envio e filtro de
    vencimento), RH e DP (documentos da empresa por área, com unidade, competência, vencimento e
@@ -109,6 +114,8 @@ Migrações em `supabase/migrations/` são a fonte da verdade. Resumo:
 - `org_documents` — documentos do RH/DP (bucket privado `org-documents/{org}/{area}/...`).
 - `commission_plans`, `employee_commission`, `sales`, `sale_payments` — comissões (remuneração:
   Admin/RH/DP da unidade e o próprio vendedor; planos legíveis por membros).
+- `job_openings`, `candidates`, `candidate_events`, `admission_checklist` — contratação; currículos
+  em `recruitment/{org}/{candidato}/{uuid}-{nome}`; candidato herda unidade da vaga.
 - `report_exports` — registro imutável de exportações.
 - `audit_log` — somente inserção via trigger; `ai_query_log` — perguntas ao assistente.
 
@@ -190,7 +197,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 54 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 60 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.

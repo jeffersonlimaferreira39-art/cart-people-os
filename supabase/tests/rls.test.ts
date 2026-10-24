@@ -601,3 +601,70 @@ describe("comissões", () => {
     ).rejects.toThrow(/row-level security/);
   });
 });
+
+describe("contratação", () => {
+  let openingU1 = "";
+  let candidateId = "";
+  beforeAll(async () => {
+    await asCommit(users.adminA, async (q) => {
+      openingU1 = (await q("insert into job_openings (organization_id, unit_id, title) values ($1, $2, 'Vendedor(a) de planejados') returning id", [ORG_A, U1])).rows[0].id;
+      // organização/unidade erradas de propósito: vêm da vaga.
+      candidateId = (await q(
+        "insert into candidates (organization_id, unit_id, opening_id, full_name, email, consent_at) values ($1, $2, $3, 'Candidata Teste', 'cand@teste.dev', now()) returning id",
+        [ORG_B, B1, openingU1],
+      )).rows[0].id;
+      await q("update candidates set stage = 'entrevista' where id = $1", [candidateId]);
+      await q("insert into admission_checklist (employee_id, organization_id, unit_id, item, label) values ($1, $2, $3, 'aso', 'Exame admissional')", [emp.colab1, ORG_A, U1]);
+    });
+  });
+  const count = (user: string, t: string) => as(user, (q) => q(`select count(*)::int n from ${t}`)).then((r) => r.rows[0].n as number);
+
+  it("candidato herda organização e unidade da vaga e o histórico registra as etapas", async () => {
+    const c = await db.query("select organization_id, unit_id from candidates where id = $1", [candidateId]);
+    expect(c.rows[0]).toEqual({ organization_id: ORG_A, unit_id: U1 });
+    const ev = await db.query("select from_stage, to_stage from candidate_events where candidate_id = $1 order by id", [candidateId]);
+    expect(ev.rows).toEqual([{ from_stage: null, to_stage: "triagem" }, { from_stage: "triagem", to_stage: "entrevista" }]);
+  });
+
+  it("RH da unidade mantém; DP lê; diretoria vê a vaga mas não os candidatos", async () => {
+    expect(await count(users.rhU1, "candidates")).toBe(1);
+    expect(await count(users.dpU1, "candidates")).toBe(1);
+    expect(await count(users.dpU1, "candidate_events")).toBe(2);
+    expect(await count(users.diretoria, "job_openings")).toBe(1);
+    expect(await count(users.diretoria, "candidates")).toBe(0);
+    const upd = await as(users.dpU1, (q) => q("update candidates set stage = 'proposta' returning 1"));
+    expect(upd.rowCount).toBe(0);
+  });
+
+  it("gestor, colaborador e outra organização não veem candidatos", async () => {
+    for (const u of [users.gestor, users.colab1, users.adminB]) {
+      expect(await count(u, "candidates")).toBe(0);
+      expect(await count(u, "candidate_events")).toBe(0);
+    }
+    expect(await count(users.adminB, "job_openings")).toBe(0);
+  });
+
+  it("consentimento é obrigatório e vaga encerrada não recebe candidatos", async () => {
+    await expect(
+      as(users.rhU1, (q) => q("insert into candidates (organization_id, unit_id, opening_id, full_name) values ($1, $2, $3, 'Sem Consentimento')", [ORG_A, U1, openingU1])),
+    ).rejects.toThrow(/consent_at/);
+    await expect(
+      as(users.rhU1, async (q) => {
+        await q("update job_openings set status = 'encerrada' where id = $1", [openingU1]);
+        return q("insert into candidates (organization_id, unit_id, opening_id, full_name, consent_at) values ($1, $2, $3, 'Tarde Demais', now())", [ORG_A, U1, openingU1]);
+      }),
+    ).rejects.toThrow(/encerrada/);
+  });
+
+  it("contratado exige vínculo com o cadastro do colaborador", async () => {
+    await expect(as(users.rhU1, (q) => q("update candidates set stage = 'contratado' where id = $1", [candidateId]))).rejects.toThrow(/check constraint/);
+  });
+
+  it("checklist de admissão: RH/DP da unidade e o próprio admitido (leitura)", async () => {
+    expect(await count(users.dpU1, "admission_checklist")).toBe(1);
+    expect(await count(users.colab1, "admission_checklist")).toBe(1);
+    expect(await count(users.colab2, "admission_checklist")).toBe(0);
+    const r = await as(users.colab1, (q) => q("update admission_checklist set done = true returning 1"));
+    expect(r.rowCount).toBe(0);
+  });
+});

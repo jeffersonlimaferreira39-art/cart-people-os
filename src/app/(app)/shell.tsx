@@ -45,6 +45,7 @@ const buildNav = cache(async (viewer: Viewer): Promise<NavGroup[]> => {
         : []),
       { href: "/ausencias", label: "Férias e ausências", icon: "ausencias", badge: pendingLeaves },
       { href: "/documentos", label: "Documentos", icon: "documentos" },
+      ...(viewerCan(viewer, "viewRecruitment") ? [{ href: "/contratacao", label: "Contratação", icon: "contratacao" as const }] : []),
     ],
   };
   const insights: NavGroup = {
