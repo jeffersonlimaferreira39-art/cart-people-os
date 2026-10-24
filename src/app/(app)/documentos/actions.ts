@@ -93,11 +93,11 @@ export async function deleteOrgDocument(id: string): Promise<ActionState> {
   const supabase = await createClient();
   const { data } = await supabase.from("org_documents").select("storage_path").eq("id", id).maybeSingle();
   if (!data) return fail("Documento não encontrado.");
-  // Registro primeiro: a RLS confirma a área/unidade; sem permissão, nada é apagado.
-  const { data: removed, error } = await supabase.from("org_documents").delete().eq("id", id).select("id");
+  // Arquivo primeiro: a política do bucket confere área/unidade pelo registro, que ainda existe.
+  const { data: removedFile, error: fileErr } = await supabase.storage.from("org-documents").remove([data.storage_path]);
+  if (fileErr || !removedFile?.length) return fail("Você não pode excluir documentos desta área ou unidade.");
+  const { error } = await supabase.from("org_documents").delete().eq("id", id);
   if (error) return fromDbError(error);
-  if (!removed?.length) return fail("Você não pode excluir documentos desta área ou unidade.");
-  await supabase.storage.from("org-documents").remove([data.storage_path]);
   refresh();
   return success("Documento excluído.");
 }
