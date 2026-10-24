@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
     ok = !(await supabase.auth.exchangeCodeForSession(code)).error;
   } else if (tokenHash && type) {
     ok = !(await supabase.auth.verifyOtp({ token_hash: tokenHash, type })).error;
+  } else {
+    // Sem code nem token_hash: a sessão está no fragmento (#access_token), lido no navegador.
+    const confirm = url.clone();
+    confirm.pathname = "/auth/confirm";
+    confirm.search = "";
+    confirm.searchParams.set("next", next);
+    return NextResponse.redirect(confirm);
   }
 
   const target = url.clone();
