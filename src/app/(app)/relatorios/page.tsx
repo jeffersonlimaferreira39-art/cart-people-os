@@ -102,7 +102,7 @@ async function ReportsContent({ searchParams }: { searchParams: PageProps<"/rela
             <ul className="divide-y divide-line">
               {recent.map((e) => (
                 <li key={e.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-[13px]">
-                  <span className="text-ink">{isReportId(e.report) ? REPORTS[e.report].title : e.report}</span>
+                  <span className="text-ink">{isReportId(e.report) ? REPORTS[e.report].title : e.report === "previa_folha" ? "Prévia da folha" : e.report}</span>
                   <span className="flex items-center gap-3 text-ink-3">
                     <span className="font-mono">{FORMAT_LABELS[e.format as keyof typeof FORMAT_LABELS] ?? e.format}</span>
                     <span className="font-mono">{e.row_count} linhas</span>

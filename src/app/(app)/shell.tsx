@@ -51,6 +51,7 @@ async function buildNav(viewer: Viewer): Promise<NavGroup[]> {
       ...(viewerCan(viewer, "viewDp")
         ? [{ href: "/dp", label: "Movimentações", icon: "dp" as const, badge: pendingDp }]
         : []),
+      ...(viewerCan(viewer, "viewSensitive") ? [{ href: "/dp/folha", label: "Prévia da folha", icon: "folha" as const }] : []),
       ...(viewerCan(viewer, "viewTime") ? [{ href: "/ponto", label: "Ponto", icon: "ponto" as const }] : []),
     ],
   };

@@ -11,6 +11,7 @@ expande para filiais sem reconstrução, atende 21 a 100 usuários na fase inici
 O sistema é responsável por **dados, fluxos, aprovações, indicadores e integrações**. O cálculo
 oficial da folha, encargos, guias e eventos do eSocial continuam no processador oficial (sistema
 de folha ou escritório contábil) até que essas funções sejam implementadas, testadas e homologadas.
+O sistema calcula uma **prévia** mensal da folha para conferência (ADR 0003), sem substituir a oficial.
 
 ## 2. Decisões oficiais
 
@@ -20,7 +21,7 @@ de folha ou escritório contábil) até que essas funções sejam implementadas,
 | Público | RH, DP, gestores, diretoria e colaboradores |
 | DP | Movimentações com aprovação e exportação para a folha oficial |
 | Ponto | Importação do espelho do sistema de ponto existente (adaptadores) |
-| Folha | Exportação por adaptador (CSV genérico na v1) |
+| Folha | Exportação por adaptador (CSV genérico na v1) + prévia mensal calculada em Excel/CSV |
 | IA | Consultas em linguagem natural sobre dados já autorizados, sem dado sensível |
 | Frontend | Next.js 16 (App Router, Cache Components) + React 19 + TypeScript |
 | Backend | Supabase (Auth, Postgres, Storage) |
@@ -44,6 +45,8 @@ Sem unidade = vale para todas. A tabela abaixo é a regra de negócio; a RLS é 
 | Ver movimentações do DP | ✓ | ✓ | ✓ | | ✓ | |
 | Registrar/aprovar movimentação (aprovador ≠ autor) | ✓ | ✓ | ✓ | | | |
 | Gerar lote para a folha | ✓ | | ✓ | | | |
+| Dados e prévia da folha (remuneração, benefícios, descontos) | ✓ | ✓ | ✓ | | | os próprios (leitura) |
+| Tabelas de cálculo da folha (INSS, IRRF, ...) | org | | org | | | |
 | Importar ponto | ✓ | | ✓ | | | |
 | Ver ponto | ✓ | ✓ | ✓ | equipe | ✓ | o próprio |
 | Assistente de IA | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -65,11 +68,15 @@ a tabela de dados sensíveis.
 4. **Movimentações do DP** — admissão, alteração salarial/cargo, transferência, afastamento,
    retorno, desligamento, férias. Fluxo `rascunho → enviada → aprovada → enviada à folha`,
    segregação de funções, lote exportável, importação de férias aprovadas.
-5. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
-6. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
-7. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
-8. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
-9. **Meus dados** — portal do colaborador e definição de senha.
+5. **Prévia da folha** — por colaborador: salário, VT, VA/VR, planos, adicionais, pensão,
+   rubricas fixas e dependentes (filhos até 14 anos, dependentes de IR); por competência:
+   lançamentos variáveis (horas extras, faltas, comissões, adiantamento) e demonstrativo estimado
+   com INSS, IRRF, FGTS e líquido; tabelas com vigência; exportação para a contabilidade.
+6. **Ponto** — importação do espelho (adaptador CSV), resumo mensal, download do resumo para a folha.
+7. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
+8. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
+9. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
+10. **Meus dados** — portal do colaborador e definição de senha.
 
 ## 5. Modelo de dados
 
@@ -85,6 +92,9 @@ Migrações em `supabase/migrations/` são a fonte da verdade. Resumo:
   (campos em `src/lib/domain/dp-events.ts`). Nunca colocar CID ou dado de saúde no payload.
 - `time_imports` + `time_entries` — ponto importado (único por colaborador e dia).
 - `employee_documents` — metadados; arquivo em `employee-documents/{org}/{employee}/{uuid}-{nome}`.
+- `employee_payroll_profile`, `employee_payroll_items`, `payroll_entries` — remuneração, rubricas
+  fixas e lançamentos do mês (sensível); `payroll_tax_tables` — tabelas de cálculo com vigência.
+- `report_exports` — registro imutável de exportações.
 - `audit_log` — somente inserção via trigger; `ai_query_log` — perguntas ao assistente.
 
 Regras no banco (triggers):
@@ -112,6 +122,8 @@ Regras no banco (triggers):
 | --- | --- | --- | --- |
 | Cadastro e vínculo | Execução de contrato / obrigação legal | amplo conforme papel | vínculo + prazos trabalhistas |
 | CPF, PIS, salário, banco | Obrigação legal (folha, eSocial) | RH, DP, admin, titular | idem |
+| Remuneração, benefícios, descontos, pensão | Execução de contrato / obrigação legal | RH, DP, admin, titular | idem |
+| Dependentes (nome, nascimento, CPF) | Obrigação legal (IR, salário-família) | RH, DP, admin, titular | idem |
 | Documentos (contrato, ASO) | Obrigação legal | RH, DP, admin, titular | conforme NR-7 e CLT |
 | Ponto | Obrigação legal (Portaria 671/2021) | DP, RH, gestor (equipe) | 5 anos |
 | Perguntas à IA | Legítimo interesse | autor, admin | 12 meses |
@@ -163,7 +175,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 31 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 42 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.

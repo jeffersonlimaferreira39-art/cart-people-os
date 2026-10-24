@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, CalendarRange, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, Sparkles, UserRound, Users,
+  BarChart3, Banknote, CalendarRange, ClipboardList, Clock3, FileClock, FileDown, LayoutDashboard, Settings2, Sparkles, UserRound, Users,
 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
@@ -14,6 +14,7 @@ const ICONS = {
   colaboradores: Users,
   ausencias: CalendarRange,
   dp: ClipboardList,
+  folha: Banknote,
   ponto: Clock3,
   assistente: Sparkles,
   auditoria: FileClock,
@@ -26,6 +27,11 @@ export type NavGroup = { label: string; items: NavItem[] };
 
 export function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () => void }) {
   const pathname = usePathname();
+  // O item mais específico vence (ex.: /dp/folha não acende "Movimentações" em /dp).
+  const activeHref = groups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => pathname === h || pathname.startsWith(h + "/"))
+    .sort((a, b) => b.length - a.length)[0];
   return (
     <nav aria-label="Principal" className="flex flex-col gap-5">
       {groups.map((group) => (
@@ -34,7 +40,7 @@ export function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigat
           <ul className="flex flex-col gap-0.5">
             {group.items.map((item) => {
               const Icon = ICONS[item.icon];
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const active = item.href === activeHref;
               return (
                 <li key={item.href}>
                   <Link

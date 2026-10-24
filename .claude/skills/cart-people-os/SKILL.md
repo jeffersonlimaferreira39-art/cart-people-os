@@ -26,7 +26,7 @@ Não troque peças da stack sem registrar a decisão em `docs/adr/`.
 3. **Dado sensível segregado.** CPF, salário, dados bancários, saúde e dependentes ficam em tabelas próprias, legíveis apenas por RH/DP/Admin. Nunca em logs, chaves de cache, URLs ou prompts de IA sem necessidade.
 4. **Auditoria.** Toda escrita em tabela de domínio passa pelo trigger de auditoria (quem, quando, o quê, antes/depois).
 5. **Multi-unidade.** Toda entidade de domínio carrega `organization_id` e, quando aplicável, `unit_id`. Nenhuma consulta assume unidade única.
-6. **Limites legais explícitos.** O sistema gerencia dados, fluxos, aprovações e integrações. Não afirme que calcula folha oficial, recolhe encargos ou transmite ao eSocial até isso existir, estar testado e homologado. Regras CLT implementadas (ex.: fracionamento de férias) ficam isoladas em `src/lib/domain/` com testes e a nota "validar com a contabilidade".
+6. **Limites legais explícitos.** O sistema gerencia dados, fluxos, aprovações e integrações. Não afirme que calcula folha oficial, recolhe encargos ou transmite ao eSocial até isso existir, estar testado e homologado. A **prévia** de folha (ADR 0003) é estimativa para conferência e deve dizer isso em tela e arquivo. Regras CLT implementadas (ex.: fracionamento de férias) ficam isoladas em `src/lib/domain/` com testes e a nota "validar com a contabilidade".
 7. **Migrações são a fonte da verdade do banco.** Nada de alteração manual no painel do Supabase sem migração correspondente.
 
 ## Fluxo para cada tarefa

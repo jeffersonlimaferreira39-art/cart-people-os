@@ -368,3 +368,103 @@ describe("registro de exportação de relatórios", () => {
     await expect(as(users.rhU1, (q) => q("update report_exports set row_count = 0"))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("prévia de folha (dados de remuneração)", () => {
+  beforeAll(async () => {
+    // Como admin da organização A (a sessão anterior deixou as claims vazias).
+    await asCommit(users.adminA, (q) => seedPayroll(q));
+  });
+
+  async function seedPayroll(q: Q) {
+    // organization_id/unit_id errados de propósito: o trigger de escopo corrige.
+    await q(
+      `insert into employee_payroll_profile (employee_id, organization_id, unit_id, vt_enabled, vt_daily_amount, va_monthly)
+       values ($1, $2, $3, true, 12.5, 600), ($4, $5, $6, false, 0, 450)`,
+      [emp.colab1, ORG_B, B1, emp.colab2, ORG_A, U2],
+    );
+    await q(
+      `insert into employee_payroll_items (employee_id, organization_id, unit_id, kind, code, description, amount, start_period)
+       values ($1, $2, $3, 'desconto', 'EMPRESTIMO_CONSIGNADO', 'Consignado', 250, '2026-01')`,
+      [emp.colab1, ORG_A, U1],
+    );
+    await q(
+      `insert into payroll_entries (employee_id, organization_id, unit_id, period, code, quantity)
+       values ($1, $2, $3, '2026-10', 'HE50', 6)`,
+      [emp.colab1, ORG_A, U1],
+    );
+  }
+
+  const count = (user: string | null, table: string) =>
+    as(user, (q) => q(`select count(*)::int as n from ${table}`)).then((r) => r.rows[0].n as number);
+
+  it("o trigger de escopo grava perfil na unidade do colaborador", async () => {
+    const r = await db.query("select organization_id, unit_id from employee_payroll_profile where employee_id = $1", [emp.colab1]);
+    expect(r.rows[0]).toEqual({ organization_id: ORG_A, unit_id: U1 });
+  });
+
+  it("RH da unidade 1 vê só a unidade 1; admin vê tudo; org B nada", async () => {
+    expect(await count(users.rhU1, "employee_payroll_profile")).toBe(1);
+    expect(await count(users.adminA, "employee_payroll_profile")).toBe(2);
+    expect(await count(users.adminB, "employee_payroll_profile")).toBe(0);
+    expect(await count(users.adminB, "payroll_entries")).toBe(0);
+  });
+
+  it("diretoria e gestor não veem remuneração; colaborador vê só a própria", async () => {
+    for (const t of ["employee_payroll_profile", "employee_payroll_items", "payroll_entries"]) {
+      expect(await count(users.diretoria, t)).toBe(0);
+      expect(await count(users.gestor, t)).toBe(0);
+    }
+    expect(await count(users.colab1, "employee_payroll_profile")).toBe(1);
+    expect(await count(users.colab1, "payroll_entries")).toBe(1);
+    expect(await count(users.colab2, "payroll_entries")).toBe(0);
+  });
+
+  it("colaborador não altera o próprio perfil nem lança variáveis", async () => {
+    const r = await as(users.colab1, (q) => q("update employee_payroll_profile set va_monthly = 9999 returning 1"));
+    expect(r.rowCount).toBe(0);
+    await expect(
+      as(users.colab1, (q) =>
+        q("insert into payroll_entries (employee_id, organization_id, unit_id, period, code, amount) values ($1, $2, $3, '2026-10', 'COMISSAO', 5000)", [
+          emp.colab1, ORG_A, U1,
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("DP da unidade 1 não lança variável para colaborador da unidade 2", async () => {
+    await expect(
+      as(users.dpU1, (q) =>
+        q("insert into payroll_entries (employee_id, organization_id, unit_id, period, code, quantity) values ($1, $2, $3, '2026-10', 'HE50', 2)", [
+          emp.colab2, ORG_A, U1,
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("lançamento do mês não é editado, só excluído", async () => {
+    await expect(as(users.dpU1, (q) => q("update payroll_entries set quantity = 60"))).rejects.toThrow(/permission denied/);
+    const r = await as(users.dpU1, (q) => q("delete from payroll_entries where employee_id = $1 returning 1", [emp.colab1]));
+    expect(r.rowCount).toBe(1);
+  });
+
+  it("tabelas de cálculo: DP de unidade lê, só admin/DP da organização altera", async () => {
+    await asCommit(users.adminA, (q) =>
+      q("insert into payroll_tax_tables (organization_id, kind, valid_from, data) values ($1, 'parametros', '2026-01-01', '{\"minimum_wage\": 1621}')", [ORG_A]),
+    );
+    expect(await count(users.dpU1, "payroll_tax_tables")).toBe(1);
+    expect(await count(users.gestor, "payroll_tax_tables")).toBe(0);
+    expect(await count(users.adminB, "payroll_tax_tables")).toBe(0);
+    await expect(
+      as(users.dpU1, (q) => q("insert into payroll_tax_tables (organization_id, kind, valid_from, data) values ($1, 'inss', '2026-02-01', '{}')", [ORG_A])),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("auditoria registra a alteração de remuneração sem os valores", async () => {
+    const r = await db.query(
+      "select old_data, new_data from audit_log where table_name = 'employee_payroll_profile' and record_id = $1",
+      [emp.colab1],
+    );
+    expect(r.rowCount).toBeGreaterThan(0);
+    expect(r.rows.every((x) => x.old_data === null && x.new_data === null)).toBe(true);
+  });
+});

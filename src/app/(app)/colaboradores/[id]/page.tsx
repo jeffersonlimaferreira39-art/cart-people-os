@@ -79,6 +79,9 @@ async function EmployeeContent({
               {viewerCan(viewer, "manageDp") ? (
                 <ButtonLink href={`/dp/nova?colaborador=${e.id}`} variant="secondary">Nova movimentação</ButtonLink>
               ) : null}
+              {viewerCanInUnit(viewer, "viewSensitive", e.unit_id) ? (
+                <ButtonLink href={`/colaboradores/${e.id}/folha`} variant="secondary">Dados da folha</ButtonLink>
+              ) : null}
               <ButtonLink href={`/colaboradores/${e.id}/editar`}>Editar cadastro</ButtonLink>
             </>
           ) : null
