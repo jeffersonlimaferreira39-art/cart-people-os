@@ -29,7 +29,7 @@ export default function TablesPage() {
 
 async function Content() {
   const viewer = await getViewer();
-  if (!viewerCan(viewer, "viewSensitive")) return <AccessDenied what="as tabelas da folha" />;
+  if (!viewerCan(viewer, "viewSensitive")) return <AccessDenied what="estas tabelas da folha" />;
   const period = todayIn().slice(0, 7);
   const [tables, versions] = await Promise.all([getPayrollTables(viewer, period), listTableVersions(viewer)]);
   const canEdit = viewer.orgWide && viewer.roles.some((r) => r === "admin" || r === "dp");

@@ -33,7 +33,7 @@ export default function PayrollPreviewPage(props: PageProps<"/dp/folha">) {
 
 async function Content({ searchParams }: { searchParams: PageProps<"/dp/folha">["searchParams"] }) {
   const viewer = await getViewer();
-  if (!viewerCan(viewer, "viewSensitive")) return <AccessDenied what="a prévia da folha" />;
+  if (!viewerCan(viewer, "viewSensitive")) return <AccessDenied what="esta prévia da folha" />;
   const sp = await searchParams;
   const wanted = typeof sp.competencia === "string" ? sp.competencia : "";
   const period = PERIOD_RE.test(wanted) ? wanted : todayIn().slice(0, 7);

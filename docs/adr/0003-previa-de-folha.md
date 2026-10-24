@@ -25,6 +25,11 @@ cálculo. A especificação mantém a folha oficial com a contabilidade até hom
 5. **Horas extras e noturnas do ponto** entram como sugestão; lançamento manual do mesmo código
    prevalece. Ausências do ponto não viram desconto automático (podem ser justificadas).
 
+6. **Minha folha** (migração 007): o titular vê a própria prévia em Meus dados, somente leitura,
+   sem o custo da empresa. As tabelas de cálculo passam a ser legíveis por qualquer membro da
+   organização (são valores legais, não pessoais) para que a prévia do titular use as mesmas
+   vigências do DP.
+
 ## Consequências
 Antes do uso real, a contabilidade compara a prévia com a folha oficial de pelo menos um mês
 (checklist de homologação). Encargos patronais além do FGTS, 13º, férias e rescisão ficam fora.

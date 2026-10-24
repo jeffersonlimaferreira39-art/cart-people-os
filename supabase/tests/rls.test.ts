@@ -447,16 +447,30 @@ describe("prévia de folha (dados de remuneração)", () => {
     expect(r.rowCount).toBe(1);
   });
 
-  it("tabelas de cálculo: DP de unidade lê, só admin/DP da organização altera", async () => {
+  it("tabelas de cálculo: membros leem, só admin/DP da organização altera", async () => {
     await asCommit(users.adminA, (q) =>
       q("insert into payroll_tax_tables (organization_id, kind, valid_from, data) values ($1, 'parametros', '2026-01-01', '{\"minimum_wage\": 1621}')", [ORG_A]),
     );
     expect(await count(users.dpU1, "payroll_tax_tables")).toBe(1);
-    expect(await count(users.gestor, "payroll_tax_tables")).toBe(0);
+    // Valores legais, não pessoais: o colaborador lê para calcular a própria prévia.
+    expect(await count(users.colab1, "payroll_tax_tables")).toBe(1);
+    expect(await count(users.gestor, "payroll_tax_tables")).toBe(1);
+    await expect(
+      as(users.colab1, (q) => q("update payroll_tax_tables set data = '{}' returning 1")).then((r) => r.rowCount),
+    ).resolves.toBe(0);
     expect(await count(users.adminB, "payroll_tax_tables")).toBe(0);
     await expect(
       as(users.dpU1, (q) => q("insert into payroll_tax_tables (organization_id, kind, valid_from, data) values ($1, 'inss', '2026-02-01', '{}')", [ORG_A])),
     ).rejects.toThrow(/row-level security/);
+  });
+
+  it("colaborador lê a própria remuneração e dependentes, nunca a de outro", async () => {
+    const own = await as(users.colab1, (q) =>
+      q("select (select count(*) from employee_payroll_items)::int i, (select count(*) from employee_sensitive)::int s"),
+    );
+    expect(own.rows[0]).toEqual({ i: 1, s: 1 });
+    const other = await as(users.colab2, (q) => q("select count(*)::int n from employee_payroll_items"));
+    expect(other.rows[0].n).toBe(0);
   });
 
   it("auditoria registra a alteração de remuneração sem os valores", async () => {

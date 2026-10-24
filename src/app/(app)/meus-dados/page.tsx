@@ -3,6 +3,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewer } from "@/lib/auth/viewer";
 import { getEmployeeDetail } from "@/lib/data/employees";
+import { getMyPayroll } from "@/lib/data/payroll";
+import { todayIn } from "@/lib/domain/dates";
+import { formatPeriod } from "@/lib/format";
 import { EMPLOYMENT_TYPE_LABELS, LEAVE_STATUS_LABELS, LEAVE_TYPE_LABELS, formatDate, formatMoney } from "@/lib/format";
 import { formatCpf } from "@/lib/domain/documents-br";
 import { PageHeader, SectionTitle } from "@/components/ui/page-header";
@@ -32,8 +35,10 @@ async function MyData() {
       </>
     );
   }
-  const detail = await getEmployeeDetail(viewer, viewer.employee.id);
+  const period = todayIn().slice(0, 7);
+  const [detail, payroll] = await Promise.all([getEmployeeDetail(viewer, viewer.employee.id), getMyPayroll(viewer, period)]);
   if (!detail) return null;
+  const pay = payroll?.result.status === "calculada" ? payroll.result.totals : null;
   const { employee: e, sensitive: s } = detail;
   const rows: [string, string][] = [
     ["Matrícula", e.registration_number],
@@ -55,6 +60,7 @@ async function MyData() {
         description="Seus dados no People OS. Se algo estiver errado, peça a correção ao RH."
         actions={
           <>
+            <ButtonLink href="/meus-dados/folha" variant="secondary">Minha folha</ButtonLink>
             <ButtonLink href="/meus-dados/senha" variant="secondary">Definir senha</ButtonLink>
             <ButtonLink href="/ausencias/nova">Solicitar ausência</ButtonLink>
           </>
@@ -76,6 +82,21 @@ async function MyData() {
           <p className="mt-3 text-[13px] text-ink-3">
             Você tem direito de acesso e correção dos seus dados pessoais (LGPD, art. 18).
           </p>
+        </section>
+        <div className="flex flex-col gap-8">
+        <section>
+          <SectionTitle aside={<Link href="/meus-dados/folha" className="text-sm text-accent hover:underline">Ver detalhes</Link>}>
+            Minha folha
+          </SectionTitle>
+          <Link href="/meus-dados/folha" className="glass block rounded-[var(--radius-panel)] border border-line px-4 py-4 transition-colors hover:border-accent/50">
+            <p className="eyebrow !text-[10.5px] text-ink-3">Líquido estimado · {formatPeriod(period).toLowerCase()}</p>
+            <p className="mt-2 font-mono text-[26px] leading-none font-semibold text-accent">{pay ? formatMoney(pay.liquido) : "—"}</p>
+            <p className="mt-2 text-[12.5px] text-ink-3">
+              {pay
+                ? `Proventos ${formatMoney(pay.proventos)} · descontos ${formatMoney(pay.descontos)}. O valor oficial é o do holerite.`
+                : "Ainda não há dados de folha para este mês."}
+            </p>
+          </Link>
         </section>
         <section>
           <SectionTitle aside={<Link href="/ausencias" className="text-sm text-accent hover:underline">Ver todas</Link>}>
@@ -101,6 +122,7 @@ async function MyData() {
             )}
           </Panel>
         </section>
+        </div>
       </div>
     </>
   );

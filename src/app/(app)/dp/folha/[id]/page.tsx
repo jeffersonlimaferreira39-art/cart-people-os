@@ -43,7 +43,7 @@ async function Content({
   const detail = await getEmployeeDetail(viewer, id);
   if (!detail) notFound();
   const e = detail.employee;
-  if (!viewerCanInUnit(viewer, "viewSensitive", e.unit_id)) return <AccessDenied what="a prévia da folha" />;
+  if (!viewerCanInUnit(viewer, "viewSensitive", e.unit_id)) return <AccessDenied what="esta prévia da folha" />;
   const [preview, entries] = await Promise.all([getPayrollPreview(viewer, period, id), listEntries(id, period)]);
   const row = preview.rows[0];
 

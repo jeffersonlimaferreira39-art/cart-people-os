@@ -139,6 +139,25 @@ type EmpRow = {
  */
 export async function getPayrollPreview(viewer: Viewer, period: string, employeeId?: string): Promise<PayrollPreview> {
   if (!viewerCan(viewer, "viewSensitive")) throw new Error("Sem acesso à prévia da folha.");
+  return computePreview(viewer, period, { employeeId, scopeToUnit: true, includeTime: viewerCan(viewer, "viewTime") });
+}
+
+/**
+ * "Minha folha": a prévia do próprio colaborador. A RLS libera ao titular a
+ * leitura dos próprios dados de remuneração, dependentes e ponto.
+ */
+export async function getMyPayroll(viewer: Viewer, period: string): Promise<PreviewRow | null> {
+  if (!viewer.employee) return null;
+  const preview = await computePreview(viewer, period, { employeeId: viewer.employee.id, scopeToUnit: false, includeTime: true });
+  return preview.rows[0] ?? null;
+}
+
+async function computePreview(
+  viewer: Viewer,
+  period: string,
+  opts: { employeeId?: string; scopeToUnit: boolean; includeTime: boolean },
+): Promise<PayrollPreview> {
+  const { employeeId } = opts;
   const supabase = await createClient();
   const { start, end } = monthBounds(period);
 
@@ -149,7 +168,7 @@ export async function getPayrollPreview(viewer: Viewer, period: string, employee
     .or(`termination_date.is.null,termination_date.gte.${start}`)
     .order("full_name")
     .limit(5000);
-  empQ = inUnit(empQ, viewer);
+  if (opts.scopeToUnit) empQ = inUnit(empQ, viewer);
   if (employeeId) empQ = empQ.eq("id", employeeId);
   const { data: empData, error } = await empQ;
   if (error) throw new Error(error.message);
@@ -178,7 +197,7 @@ export async function getPayrollPreview(viewer: Viewer, period: string, employee
       "payroll_entries", "employee_id, code, quantity, amount", (q) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq("period", period)),
     fetchIn<{ employee_id: string; relationship: string; birth_date: string | null; ir_dependent: boolean }>(
       "dependents", "employee_id, relationship, birth_date, ir_dependent"),
-    viewerCan(viewer, "viewTime")
+    opts.includeTime
       ? fetchIn<{ employee_id: string; overtime_minutes: number; night_minutes: number }>(
           "time_entries", "employee_id, overtime_minutes, night_minutes",
           (q) => (q as unknown as { gte: (c: string, v: string) => { lte: (c: string, v: string) => unknown } }).gte("work_date", start).lte("work_date", end))

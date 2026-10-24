@@ -5,7 +5,18 @@ import { Notice } from "@/components/ui/notice";
 import { cn } from "@/components/ui/cn";
 
 /** Demonstrativo da prévia (formato de holerite), com bases e avisos. */
-export function Payslip({ result, tables, compact = false }: { result: PayrollResult; tables: PayrollTables; compact?: boolean }) {
+export function Payslip({
+  result,
+  tables,
+  compact = false,
+  audience = "dp",
+}: {
+  result: PayrollResult;
+  tables: PayrollTables;
+  compact?: boolean;
+  /** "titular": texto para o próprio colaborador, sem detalhes técnicos das tabelas. */
+  audience?: "dp" | "titular";
+}) {
   if (result.status !== "calculada") {
     return <p className="px-4 py-5 text-sm text-ink-2">{result.reason}</p>;
   }
@@ -83,8 +94,13 @@ export function Payslip({ result, tables, compact = false }: { result: PayrollRe
           ["Base FGTS", t.baseFgts],
           ["FGTS (empresa)", t.fgts],
           ...info.filter((l) => l.code !== "FGTS").map((l) => [l.label, l.amount] as [string, number]),
-          ["Benefícios (empresa)", t.beneficiosEmpresa],
-          ["Custo estimado", t.custoEmpresa],
+          // Custo da empresa é informação interna do DP, não do titular.
+          ...(audience === "dp"
+            ? ([
+                ["Benefícios (empresa)", t.beneficiosEmpresa],
+                ["Custo estimado", t.custoEmpresa],
+              ] as [string, number][])
+            : []),
         ].map(([k, v]) => (
           <div key={k as string} className="bg-surface px-4 py-3">
             <dt className="eyebrow !text-[10px] text-ink-3">{k}</dt>
@@ -95,6 +111,12 @@ export function Payslip({ result, tables, compact = false }: { result: PayrollRe
 
       <div className="flex flex-col gap-2 border-t border-line p-4">
         {result.warnings.map((w) => <Notice key={w} tone="attention">{w}</Notice>)}
+        {audience === "titular" ? (
+          <p className="text-[12px] text-ink-3">
+            Estimativa calculada pelo People OS. O valor que vale é o do holerite emitido pela contabilidade, que pode
+            incluir ajustes do mês. Dúvidas? Fale com o DP.
+          </p>
+        ) : (
         <p className="text-[12px] text-ink-3">
           Prévia para conferência, não é holerite oficial. Tabelas:{" "}
           {sources.every((s) => s === "referência")
@@ -102,6 +124,7 @@ export function Payslip({ result, tables, compact = false }: { result: PayrollRe
             : `vigências ${[...new Set(sources)].map((s) => (s === "referência" ? "referência" : formatDate(s))).join(", ")}`}
           . DSR sem feriados; encargos patronais além do FGTS ficam com a contabilidade.
         </p>
+        )}
       </div>
     </div>
   );

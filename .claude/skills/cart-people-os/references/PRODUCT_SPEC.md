@@ -76,7 +76,8 @@ a tabela de dados sensíveis.
 7. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
 8. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
 9. **Auditoria** — trilha de alterações, sem valores de dados sensíveis.
-10. **Meus dados** — portal do colaborador e definição de senha.
+10. **Meus dados** — portal do colaborador, definição de senha e "Minha folha" (prévia do próprio
+    pagamento, benefícios, rubricas, lançamentos e dependentes; somente leitura, últimos 6 meses).
 
 ## 5. Modelo de dados
 
@@ -175,7 +176,7 @@ sensíveis), segregação, controle de acesso, rastreabilidade e direito de aces
 ## 13. Critérios de aceite da v1
 
 - [ ] Migrações aplicam em projeto Supabase limpo; seed cria organização e matriz.
-- [ ] 42 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
+- [ ] 43 testes de RLS passam; nenhum papel lê dados fora do seu escopo.
 - [ ] Fluxo de férias: solicitar → decidir → aparecer no DP como rascunho.
 - [ ] Fluxo de movimentação com aprovador diferente do autor e lote baixado em CSV.
 - [ ] Importação de ponto com relatório de linhas ignoradas.
