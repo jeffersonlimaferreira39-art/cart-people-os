@@ -22,6 +22,12 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      # Cópia externa no Cloudflare R2 (compatível com S3)
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
     steps:
       - name: Conferir segredos
         run: |
@@ -60,3 +66,19 @@ jobs:
           path: backup-out/
           retention-days: 30
           if-no-files-found: error
+      - name: Enviar para o Cloudflare R2
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::error::Cadastre os segredos R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID e R2_SECRET_ACCESS_KEY (docs/BACKUP.md)"
+            exit 1
+          fi
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          day=$(date -u +%Y/%m)
+          for f in backup-out/*; do
+            aws s3 cp "$f" "s3://${R2_BUCKET}/backups/${day}/$(basename "$f")" --endpoint-url "$endpoint" --only-show-errors
+          done
+          # Confere: o arquivo no R2 tem o mesmo tamanho do gerado aqui.
+          enc=$(ls backup-out/*.enc)
+          remote=$(aws s3api head-object --bucket "$R2_BUCKET" --key "backups/${day}/$(basename "$enc")" --endpoint-url "$endpoint" --query ContentLength --output text)
+          test "$remote" = "$(stat -c %s "$enc")"
+          echo "✓ Enviado para r2://${R2_BUCKET}/backups/${day}/ ($remote bytes)"

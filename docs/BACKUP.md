@@ -10,7 +10,7 @@ Por isso o repositório tem um **backup próprio**, diário e criptografado:
 | Arquivos | Buckets `employee-documents` e `org-documents` |
 | Conferência | `row-counts.json` (linhas por tabela) e `manifest.json` |
 | Proteção | AES-256 (`openssl -pbkdf2`, 200 mil iterações) com a senha `BACKUP_PASSPHRASE` |
-| Onde fica | Artefato do GitHub Actions, 30 dias, no repositório privado |
+| Onde fica | **Cloudflare R2** (bucket privado, pasta `backups/AAAA/MM/`) e, como segunda cópia, artefato do GitHub Actions por 30 dias |
 | Quando | Todo dia às 02:17 (horário de Brasília) e sob demanda |
 
 > O backup contém dados pessoais e sensíveis (LGPD). Sem a senha ele é ilegível; guarde a senha
@@ -26,12 +26,28 @@ GitHub → repositório → Settings → Secrets and variables → Actions → *
 | `SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys → secret (`sb_secret_...`) |
 | `BACKUP_PASSPHRASE` | Senha longa gerada para o backup (guarde no cofre) |
+| `R2_ACCOUNT_ID` | Cloudflare → R2 → Account ID (aparece na página do R2) |
+| `R2_BUCKET` | Nome do bucket, ex.: `cart-people-os-backups` |
+| `R2_ACCESS_KEY_ID` | Token da API do R2 (Object Read & Write, só neste bucket) → Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | O mesmo token → Secret Access Key |
+
+### Cloudflare R2 (uma vez)
+1. Cloudflare → **R2 Object Storage** → ative o R2 (o plano gratuito inclui 10 GB; a Cloudflare pede um
+   meio de pagamento para ativar).
+2. **Create bucket**: `cart-people-os-backups`, localização automática ou América do Sul. Deixe **privado**
+   (sem domínio público nem acesso r2.dev).
+3. **Manage API tokens → Create API token**: permissão *Object Read & Write*, aplicada **só a este bucket**.
+   Copie Access Key ID e Secret Access Key (o segredo só aparece uma vez).
+4. Retenção (recomendado): no bucket → Settings → **Object lifecycle rules** → apagar objetos com prefixo
+   `backups/` após 180 dias.
 
 Depois: Actions → **Backup** → Run workflow, para gerar o primeiro e conferir.
 
 ## Baixar e abrir um backup
 
-1. Actions → Backup → execução desejada → Artifacts → baixe `backup-<id>.zip` e descompacte.
+1. Do R2: Cloudflare → R2 → bucket → `backups/AAAA/MM/` → baixe o `.tar.gz.enc` e o `.sha256` da data.
+   Ou pelo terminal: `aws s3 cp s3://<bucket>/backups/AAAA/MM/<arquivo> . --endpoint-url https://<account_id>.r2.cloudflarestorage.com`
+   (com as chaves do token). Alternativa: Actions → Backup → execução → Artifacts (últimos 30 dias).
 2. `BACKUP_PASSPHRASE='...' bash scripts/backup/decrypt.sh cart-people-os-<data>.tar.gz.enc ./restauracao`
 3. Confira a integridade na pasta do download: `sha256sum -c cart-people-os-<data>.sha256` (deve dizer OK).
 
