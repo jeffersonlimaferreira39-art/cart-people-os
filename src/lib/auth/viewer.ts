@@ -1,10 +1,11 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { can, isRole, type Capability, type Role } from "@/lib/domain/roles";
 import type { Unit } from "@/lib/types";
+import { PASSWORD_PATH, PATHNAME_HEADER } from "@/lib/auth/password-gate";
 
 export const UNIT_COOKIE = "cart_unit";
 export const ALL_UNITS = "all";
@@ -34,6 +35,10 @@ export const getViewer = cache(async (): Promise<Viewer> => {
   const { data: claimsData } = await supabase.auth.getClaims();
   const claims = claimsData?.claims;
   if (!claims?.sub) redirect("/login");
+  // Senha provisória criada pelo administrador: nada além de "Definir senha" até trocá-la.
+  if ((claims.app_metadata as { must_change_password?: boolean } | undefined)?.must_change_password) {
+    if ((await headers()).get(PATHNAME_HEADER) !== PASSWORD_PATH) redirect(PASSWORD_PATH);
+  }
 
   // Papéis (com organização e unidades embutidas) e cadastro em paralelo: uma viagem ao banco.
   const [{ data: memberships }, { data: employee }] = await Promise.all([
