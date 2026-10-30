@@ -730,4 +730,11 @@ describe("controle de acesso", () => {
     await expect(as(users.adminB, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'usuario_criado', $2)", [users.colab1, users.adminB]))).rejects.toThrow(/row-level security/);
     await expect(as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'usuario_criado', $1)", [users.colab1]))).rejects.toThrow(/row-level security/);
   });
+
+  it("troca de senha: cada um registra só a própria", async () => {
+    const ok = await as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'senha_alterada', $1) returning 1", [users.colab1]));
+    expect(ok.rowCount).toBe(1);
+    await expect(as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'senha_alterada', $2)", [users.colab2, users.colab1]))).rejects.toThrow(/row-level security/);
+    await expect(as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'senha_alterada', $1)", [users.colab2]))).rejects.toThrow(/row-level security/);
+  });
 });

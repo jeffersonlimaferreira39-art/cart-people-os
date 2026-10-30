@@ -32,5 +32,6 @@ export async function setPassword(_: ActionState, form: FormData): Promise<Actio
     if (flagErr) return fail("Senha salva, mas não foi possível liberar o acesso. Tente salvar de novo.");
     await supabase.auth.refreshSession();
   }
+  if (data.user) await supabase.from("access_events").insert({ user_id: data.user.id, actor_id: data.user.id, event: "senha_alterada" });
   return success("Senha definida. Use-a nos próximos acessos.");
 }
