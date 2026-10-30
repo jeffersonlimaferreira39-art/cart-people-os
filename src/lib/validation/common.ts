@@ -30,3 +30,11 @@ export const money = z
   })
   .refine((n) => Number.isFinite(n) && n >= 0 && n < 10_000_000, "Valor inválido.")
   .optional();
+
+/** Política de senha do People OS (definida pelo usuário ou provisória do administrador). */
+export const password = z
+  .string()
+  .min(10, "Use pelo menos 10 caracteres.")
+  .max(72, "Use no máximo 72 caracteres.")
+  .regex(/[A-Za-z]/, "Inclua letras.")
+  .regex(/\d/, "Inclua números.");

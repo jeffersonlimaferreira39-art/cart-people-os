@@ -44,6 +44,9 @@ export const ACCESS_EVENTS = {
   desbloqueio: "Acesso desbloqueado",
   sessoes_encerradas: "Sessões encerradas",
   link_reenviado: "Link de acesso reenviado",
+  usuario_criado: "Usuário criado com senha provisória",
+  senha_definida: "Senha definida pelo administrador",
+  senha_alterada: "Trocou a senha",
 } as const;
 export type AccessEvent = keyof typeof ACCESS_EVENTS;
 

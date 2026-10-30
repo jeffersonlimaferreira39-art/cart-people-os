@@ -9,6 +9,7 @@ import { getViewer } from "@/lib/auth/viewer";
 import { isOrgAdmin } from "@/lib/data/access";
 import { env } from "@/lib/env";
 import { ROLES } from "@/lib/domain/roles";
+import { password } from "@/lib/validation/common";
 import { fail, formToObject, fromDbError, fromZod, success, type ActionState } from "@/lib/actions";
 
 /** "Bloqueio por tempo indeterminado" no Auth (100 anos). */
@@ -21,7 +22,7 @@ async function orgAdmin() {
 
 const uuid = z.uuid();
 
-async function logAdminEvent(userId: string, actorId: string, event: "bloqueio" | "desbloqueio" | "sessoes_encerradas" | "link_reenviado") {
+async function logAdminEvent(userId: string, actorId: string, event: "bloqueio" | "desbloqueio" | "sessoes_encerradas" | "link_reenviado" | "usuario_criado") {
   const supabase = await createClient();
   await supabase.from("access_events").insert({ user_id: userId, event, actor_id: actorId });
 }
@@ -167,4 +168,62 @@ export async function resendAccessLink(userId: string): Promise<ActionState> {
   await logAdminEvent(userId, viewer.userId, "link_reenviado");
   refresh();
   return success(`Link enviado para ${email}.`);
+}
+
+const createUserSchema = z.object({
+  email: z.email("E-mail inválido."),
+  password,
+  role: z.enum(ROLES),
+  unit_id: z.uuid().optional(),
+  employee_id: z.uuid().optional(),
+});
+
+/**
+ * Cria o usuário já com e-mail e senha provisória (sem depender do e-mail de
+ * convite). No primeiro acesso ele é obrigado a trocar a senha: a marca fica em
+ * app_metadata, que só o servidor altera. O papel é gravado com a sessão do
+ * administrador, portanto validado pela RLS.
+ */
+export async function createUserWithPassword(_: ActionState, form: FormData): Promise<ActionState> {
+  const viewer = await orgAdmin();
+  if (!viewer) return fail("Apenas o administrador geral cria usuários com senha.");
+  const parsed = createUserSchema.safeParse(formToObject(form));
+  if (!parsed.success) return fromZod(parsed.error);
+  const { email, role, unit_id, employee_id } = parsed.data;
+
+  const admin = createAdminClient();
+  const created = await admin.auth.admin.createUser({
+    email,
+    password: parsed.data.password,
+    email_confirm: true,
+    app_metadata: { must_change_password: true },
+  });
+  if (created.error?.code === "email_exists") {
+    return fail("Este e-mail já tem conta. Use \"Conceder acesso\" abaixo para dar o papel, ou \"Reenviar link\" na página do usuário para uma nova senha.", { email: ["E-mail já cadastrado."] });
+  }
+  if (created.error?.code === "weak_password") return fail("Senha fraca para o Auth. Escolha outra.", { password: ["Senha recusada pelo Auth."] });
+  const userId = created.data.user?.id;
+  if (!userId) return fail("Não foi possível criar o usuário. Confira o e-mail e tente novamente.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("memberships").insert({
+    user_id: userId,
+    organization_id: viewer.organization.id,
+    unit_id: unit_id ?? null,
+    role,
+    created_by: viewer.userId,
+  });
+  if (error) {
+    // Sem papel, a conta não serve para nada: desfaz para não deixar login órfão.
+    await admin.auth.admin.deleteUser(userId);
+    return fromDbError(error);
+  }
+  await logAdminEvent(userId, viewer.userId, "usuario_criado");
+
+  if (employee_id) {
+    const { error: linkErr } = await supabase.from("employees").update({ user_id: userId }).eq("id", employee_id);
+    if (linkErr) return fail("Usuário criado, mas não foi possível vincular ao cadastro do colaborador (ele já pode estar vinculado a outro usuário).");
+  }
+  refresh();
+  return success(`Usuário ${email} criado. Passe a senha provisória por um canal seguro: no primeiro acesso ela será trocada.`);
 }
