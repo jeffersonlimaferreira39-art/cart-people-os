@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { recordAccess } from "@/lib/auth/access-log";
+import { PASSWORD_PATH } from "@/lib/auth/password-gate";
 import { fail, success, type ActionState } from "@/lib/actions";
 
 const schema = z.object({
@@ -49,9 +50,10 @@ export async function signIn(_: ActionState, form: FormData): Promise<ActionStat
   }
 
   if (!password) return fail("Informe a senha ou peça um link de acesso por e-mail.");
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error?.code === "user_banned") return fail("Seu acesso está bloqueado. Procure o administrador do People OS.");
   await recordAccess(email, error ? "login_falhou" : "login");
   if (error) return fail("E-mail ou senha incorretos.");
-  redirect(next);
+  // Senha provisória criada pelo administrador: primeiro a troca.
+  redirect(data.user?.app_metadata?.must_change_password ? PASSWORD_PATH : next);
 }
