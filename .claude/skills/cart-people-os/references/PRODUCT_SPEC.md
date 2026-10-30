@@ -92,7 +92,8 @@ a tabela de dados sensíveis.
 8. **Assistente** — perguntas em linguagem natural; ferramentas somente leitura sob RLS.
 9. **Configurações** — unidades, departamentos, cargos (CBO), acessos por convite.
    **Controle de acesso** (administrador geral) — usuários com papéis, situação, último acesso e
-   sessões; alterar papel/escopo, revogar, bloquear/desbloquear (suspende papéis, encerra sessões,
+   sessões; criar usuário com e-mail e senha provisória (troca obrigatória no primeiro acesso,
+   marca em `app_metadata`); alterar papel/escopo, revogar, bloquear/desbloquear (suspende papéis, encerra sessões,
    bloqueia o login no Auth), reenviar convite ou link de senha; revisão periódica a cada 90 dias
    (carimbo de quem revisou no banco); histórico de acessos (entradas, senhas incorretas, saídas e
    ações administrativas, com IP e dispositivo).
@@ -139,8 +140,9 @@ Regras no banco (triggers):
 ## 6. Segurança
 
 - RLS em todas as tabelas; funções auxiliares `SECURITY DEFINER` no schema `private` (não exposto).
-- `anon` não acessa tabelas. Sem cadastro aberto: entrada só por convite.
-- Chave secreta apenas no servidor (convites e e-mails na auditoria). Escritas de domínio sempre
+- `anon` não acessa tabelas. Sem cadastro aberto: entrada só por convite ou por
+  usuário criado pelo administrador geral (senha provisória trocada no primeiro acesso).
+- Chave secreta apenas no servidor (convites, criação de usuário e e-mails na auditoria). Escritas de domínio sempre
   com a sessão do usuário.
 - Toda Server Action revalida sessão e papel; entradas validadas com Zod.
 - Cabeçalhos: `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, HSTS, `nosniff`, Referrer-Policy.

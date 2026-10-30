@@ -723,4 +723,11 @@ describe("controle de acesso", () => {
     const ok = await as(users.adminA, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'bloqueio', $2) returning 1", [users.colab1, users.adminA]));
     expect(ok.rowCount).toBe(1);
   });
+
+  it("usuário criado com senha: só o administrador registra, em nome próprio", async () => {
+    const ok = await as(users.adminA, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'usuario_criado', $2) returning 1", [users.colab1, users.adminA]));
+    expect(ok.rowCount).toBe(1);
+    await expect(as(users.adminB, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'usuario_criado', $2)", [users.colab1, users.adminB]))).rejects.toThrow(/row-level security/);
+    await expect(as(users.colab1, (q) => q("insert into access_events (user_id, event, actor_id) values ($1, 'usuario_criado', $1)", [users.colab1]))).rejects.toThrow(/row-level security/);
+  });
 });

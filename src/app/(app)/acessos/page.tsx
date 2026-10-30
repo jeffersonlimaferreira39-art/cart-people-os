@@ -21,9 +21,9 @@ import { Table, TBody, THead, Td, Th, Tr } from "@/components/ui/table";
 import { cn } from "@/components/ui/cn";
 import { InviteForm } from "../configuracoes/forms";
 import { inviteUser } from "../configuracoes/actions";
-import { ReviewForm, type ReviewItem } from "./forms";
+import { CreateUserForm, ReviewForm, type ReviewItem } from "./forms";
 import { EventsTable, STATUS_TONE, scopeLabel } from "./shared";
-import { confirmReview, revokeAccess } from "./actions";
+import { confirmReview, createUserWithPassword, revokeAccess } from "./actions";
 
 export const metadata: Metadata = { title: "Acessos" };
 
@@ -140,7 +140,17 @@ async function Users({ viewer, users, filter }: { viewer: Viewer; users: AccessU
         )}
       </Panel>
       <section>
-        <SectionTitle>Conceder acesso</SectionTitle>
+        <SectionTitle>Criar usuário com e-mail e senha</SectionTitle>
+        <Panel>
+          <CreateUserForm action={createUserWithPassword} units={viewer.units.filter((u) => u.active)} employees={employees ?? []} />
+        </Panel>
+        <p className="mt-2 text-[13px] text-ink-3">
+          A pessoa entra em seguida com este e-mail e a senha provisória, sem esperar e-mail de convite, e é obrigada a criar a própria senha no primeiro acesso.
+          Entregue a senha provisória pessoalmente ou por um canal seguro.
+        </p>
+      </section>
+      <section>
+        <SectionTitle>Conceder acesso por convite</SectionTitle>
         <Panel>
           <InviteForm action={inviteUser} units={viewer.units.filter((u) => u.active)} employees={employees ?? []} />
         </Panel>

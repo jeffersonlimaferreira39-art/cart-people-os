@@ -23,6 +23,7 @@ A produção com dados reais só começa com todos os itens marcados e as assina
 - [ ] Envio, download e exclusão de documentos testados em cada aba (Colaboradores, RH, DP) e
       documento "visível a todos" conferido com um usuário colaborador
 - [ ] Primeira revisão de acessos feita em Acessos → Revisão periódica; bloqueio testado com um usuário de teste
+- [ ] Usuário criado em Acessos com e-mail e senha provisória entra e é obrigado a criar a própria senha
 - [ ] RH validou o checklist de admissão e a exclusão de candidatos não contratados (LGPD)
 - [ ] Comercial validou os planos de comissão (faixas, categorias, base venda/recebido) com um mês real
       e a planilha exportada do sistema de vendas foi importada sem linhas ignoradas

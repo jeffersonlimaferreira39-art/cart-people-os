@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const PUBLIC_PATHS = ["/login", "/auth"];
+/** Única página liberada enquanto o usuário usa a senha provisória criada pelo administrador. */
+export const PASSWORD_PATH = "/meus-dados/senha";
 
 /** Renova a sessão do Supabase e faz o redirecionamento otimista para o login. */
 export async function updateSession(request: NextRequest) {
@@ -31,6 +33,18 @@ export async function updateSession(request: NextRequest) {
     login.search = "";
     if (request.nextUrl.pathname !== "/") login.searchParams.set("next", request.nextUrl.pathname);
     return NextResponse.redirect(login);
+  }
+
+  const appMeta = data?.claims?.app_metadata as { must_change_password?: boolean } | undefined;
+  if (appMeta?.must_change_password && !isPublic && request.nextUrl.pathname !== PASSWORD_PATH) {
+    const target = request.nextUrl.clone();
+    target.pathname = PASSWORD_PATH;
+    target.search = "";
+    // 303: também converte POSTs de outras páginas em GET, sem reenviar o corpo.
+    // Leva junto os cookies da sessão eventualmente renovada acima.
+    const redirect = NextResponse.redirect(target, 303);
+    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
   }
   return response;
 }

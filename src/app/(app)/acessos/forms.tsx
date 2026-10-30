@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import type { ActionState } from "@/lib/actions";
 import { ROLE_LABELS, ROLES, type Role } from "@/lib/domain/roles";
-import { Select } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormMessage } from "@/components/ui/form-message";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +101,97 @@ export function MembershipForm({ action, role, unitId, units }: { action: Act; r
         <SubmitButton variant="secondary" size="sm">Salvar</SubmitButton>
       </div>
       <FormMessage state={state} />
+    </form>
+  );
+}
+
+/** Senha provisória legível (sem 0/O, 1/l/I), sempre com letras e números. */
+function generatePassword() {
+  const letters = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
+  const pick = (set: string) => set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length];
+  const chars = [pick(letters), pick("23456789"), ...Array.from({ length: 10 }, () => pick(letters + "23456789"))];
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
+
+/** Cria o usuário com e-mail e senha provisória (troca obrigatória no primeiro acesso). */
+export function CreateUserForm({
+  action, units, employees,
+}: {
+  action: Act;
+  units: { id: string; name: string }[];
+  employees: { id: string; full_name: string }[];
+}) {
+  const [state, formAction] = useActionState(action, null);
+  const ref = useRef<HTMLFormElement>(null);
+  const [pwd, setPwd] = useState("");
+  const [show, setShow] = useState(false);
+  // Limpa a senha ao criar (ajuste durante a renderização, sem efeito em cascata).
+  const [seen, setSeen] = useState(state);
+  if (state !== seen) {
+    setSeen(state);
+    if (state?.ok) {
+      setPwd("");
+      setShow(false);
+    }
+  }
+  useEffect(() => {
+    if (state?.ok) ref.current?.reset();
+  }, [state]);
+  const err = (k: string) => state?.fieldErrors?.[k];
+  return (
+    <form ref={ref} action={formAction} className="flex flex-col gap-3 p-4">
+      <FormMessage state={state} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="E-mail de acesso" name="nu-email" error={err("email")}>
+          <Input id="nu-email" aria-describedby={err("email") ? "nu-email-error" : undefined} type="email" name="email" autoComplete="off" required invalid={!!err("email")} />
+        </Field>
+        <Field label="Senha provisória" name="nu-password" error={err("password")} hint="Mínimo de 10 caracteres, com letras e números. A pessoa troca no primeiro acesso.">
+          <div className="flex gap-2">
+            <Input
+              id="nu-password"
+              aria-describedby={err("password") ? "nu-password-error" : undefined}
+              type={show ? "text" : "password"}
+              name="password"
+              autoComplete="new-password"
+              required
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              invalid={!!err("password")}
+              className="min-w-0 flex-1 font-mono"
+            />
+            <button type="button" onClick={() => setShow((v) => !v)} className="shrink-0 rounded-[var(--radius-control)] border border-line-strong px-2.5 text-[13px] text-ink-2 hover:text-ink">
+              {show ? "Ocultar" : "Mostrar"}
+            </button>
+            <button type="button" onClick={() => { setPwd(generatePassword()); setShow(true); }} className="shrink-0 rounded-[var(--radius-control)] border border-line-strong px-2.5 text-[13px] text-ink-2 hover:text-ink">
+              Gerar
+            </button>
+          </div>
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(10rem,1fr)_minmax(11rem,1fr)_minmax(0,1.6fr)_auto] lg:items-end">
+        <Field label="Papel" name="nu-role">
+          <Select id="nu-role" name="role" defaultValue="colaborador">
+            {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+          </Select>
+        </Field>
+        <Field label="Escopo" name="nu-unit_id">
+          <Select id="nu-unit_id" name="unit_id" defaultValue="">
+            <option value="">Todas as unidades</option>
+            {units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Cadastro de colaborador" name="nu-employee_id">
+          <Select id="nu-employee_id" name="employee_id" defaultValue="">
+            <option value="">Não vincular</option>
+            {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+          </Select>
+        </Field>
+        <SubmitButton pendingLabel="Criando…">Criar usuário</SubmitButton>
+      </div>
     </form>
   );
 }
